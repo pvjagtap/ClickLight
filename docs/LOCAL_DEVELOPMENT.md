@@ -41,6 +41,14 @@ open ClickLight.app
 
 ClickLight appears in the macOS menu bar.
 
+For a more permanent local install, copy the built app into `~/Applications`:
+
+```bash
+mkdir -p "$HOME/Applications"
+cp -R ClickLight.app "$HOME/Applications/ClickLight.app"
+open "$HOME/Applications/ClickLight.app"
+```
+
 ## Grant Accessibility Permission
 
 ClickLight listens for global mouse events, so macOS requires Accessibility access.

@@ -36,7 +36,20 @@ open ClickLight.app
 
 The build script compiles the Swift package in release mode and creates `ClickLight.app` in the project folder.
 
-On first launch, macOS may ask for Accessibility access. If clicks do not show highlights, open:
+## Install
+
+ClickLight does not have a packaged installer yet. To install it locally, build the app and copy it into your Applications folder:
+
+```bash
+./build-app.sh
+mkdir -p "$HOME/Applications"
+cp -R ClickLight.app "$HOME/Applications/ClickLight.app"
+open "$HOME/Applications/ClickLight.app"
+```
+
+You can also drag `ClickLight.app` into `/Applications` in Finder.
+
+On first launch, macOS may ask for Accessibility access because ClickLight listens for global mouse clicks. If clicks do not show highlights, open:
 
 ```text
 System Settings -> Privacy & Security -> Accessibility
@@ -55,6 +68,8 @@ ClickLight is a native Swift/AppKit app. It uses:
 - `NSStatusItem` for the menu-bar controls
 
 For more detail on how this is built without an Xcode project, read [Building Without Xcode](docs/BUILDING_WITHOUT_XCODE.md).
+
+For installation steps, read [Installation](docs/INSTALLATION.md).
 
 For local development and iteration instructions, read [Local Development](docs/LOCAL_DEVELOPMENT.md).
 
@@ -75,6 +90,7 @@ For local development and iteration instructions, read [Local Development](docs/
 │   └── StatusController.swift
 └── docs
     ├── BUILDING_WITHOUT_XCODE.md
+    ├── INSTALLATION.md
     └── LOCAL_DEVELOPMENT.md
 ```
 
