@@ -230,6 +230,10 @@ final class ClickOverlayView: NSView {
     }
 
     private func color(for kind: ClickKind) -> NSColor {
+        if let color = settings.colorPreset.color {
+            return color
+        }
+
         switch kind {
         case .leftDown:
             return NSColor(calibratedRed: 0.0, green: 0.74, blue: 1.0, alpha: 1)

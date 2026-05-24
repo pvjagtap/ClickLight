@@ -113,6 +113,7 @@ final class StatusController {
             selected: settings.duration,
             action: #selector(selectDuration(_:))
         ))
+        menu.addItem(colorSubmenu(selected: settings.colorPreset))
         menu.addItem(NSMenuItem.separator())
 
         let captureItem = NSMenuItem(title: "Click Capture: \(captureStatus())", action: nil, keyEquivalent: "")
@@ -174,6 +175,20 @@ final class StatusController {
         return item
     }
 
+    private func colorSubmenu(selected: ClickColorPreset) -> NSMenuItem {
+        let item = NSMenuItem(title: "Colors", action: nil, keyEquivalent: "")
+        let menu = NSMenu()
+        for preset in ClickColorPreset.allCases {
+            let child = NSMenuItem(title: preset.title, action: #selector(selectColor(_:)), keyEquivalent: "")
+            child.target = self
+            child.representedObject = preset.rawValue
+            child.state = preset == selected ? .on : .off
+            menu.addItem(child)
+        }
+        item.submenu = menu
+        return item
+    }
+
     @objc private func toggleEnabled() {
         settingsStore.update { $0.isEnabled.toggle() }
     }
@@ -207,6 +222,14 @@ final class StatusController {
     @objc private func selectDuration(_ sender: NSMenuItem) {
         guard let value = sender.representedObject as? Double else { return }
         settingsStore.update { $0.duration = value }
+    }
+
+    @objc private func selectColor(_ sender: NSMenuItem) {
+        guard
+            let rawValue = sender.representedObject as? String,
+            let preset = ClickColorPreset(rawValue: rawValue)
+        else { return }
+        settingsStore.update { $0.colorPreset = preset }
     }
 
     @objc private func openAccessibilitySettings() {
