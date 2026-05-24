@@ -20,7 +20,7 @@ struct ClickSettings: Equatable {
         showDrag: true,
         showMenuBarText: true,
         size: 64,
-        intensity: 0.9,
+        intensity: 0.7,
         duration: 0.48,
         colorPreset: .default
     )
