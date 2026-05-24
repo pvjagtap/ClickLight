@@ -4,6 +4,12 @@ ClickLight is a tiny native macOS menu-bar app for live coding demos. It highlig
 
 It was built for the common demo problem where your physical click happens slightly before the UI changes on screen.
 
+## Demo
+
+[![ClickLight menu and controls](docs/assets/clicklight-menu.png)](docs/assets/clicklight-demo.mp4)
+
+[Watch the demo video](docs/assets/clicklight-demo.mp4)
+
 ## Features
 
 - Global click highlighting across macOS apps, including browsers and editors
