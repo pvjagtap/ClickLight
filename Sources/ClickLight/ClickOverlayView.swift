@@ -91,21 +91,24 @@ final class ClickOverlayView: NSView {
             )
             drawDot(context: context, point: pulse.point, radius: pulse.baseSize * 0.085, color: pulse.color, alpha: alpha * 0.75)
         case .leftUp:
+            let releaseRadius = pulse.baseSize * (0.76 - 0.42 * eased)
+            let releaseAlpha = alpha * 0.55
             drawGlowIfNeeded(
                 context: context,
                 point: pulse.point,
-                radius: pulse.baseSize * (0.42 + 0.56 * eased),
+                radius: releaseRadius * 1.25,
                 color: pulse.color,
-                alpha: fade * visualIntensity * 0.7
+                alpha: fade * visualIntensity * 0.45
             )
             drawRing(
                 context: context,
                 point: pulse.point,
-                radius: pulse.baseSize * (0.34 + 0.44 * eased),
-                lineWidth: lineWidth * 0.7,
+                radius: releaseRadius,
+                lineWidth: lineWidth * 0.55,
                 color: pulse.color,
-                alpha: alpha * 0.65
+                alpha: releaseAlpha
             )
+            drawDot(context: context, point: pulse.point, radius: pulse.baseSize * 0.055, color: pulse.color, alpha: releaseAlpha * 0.6)
         case .rightDown:
             drawGlowIfNeeded(
                 context: context,
@@ -124,21 +127,24 @@ final class ClickOverlayView: NSView {
             )
             drawCrosshair(context: context, point: pulse.point, size: pulse.baseSize * 0.28, color: pulse.color, alpha: alpha * 0.85)
         case .rightUp:
+            let releaseRadius = pulse.baseSize * (0.68 - 0.36 * eased)
+            let releaseAlpha = alpha * 0.5
             drawGlowIfNeeded(
                 context: context,
                 point: pulse.point,
-                radius: pulse.baseSize * (0.36 + 0.5 * eased),
+                radius: releaseRadius * 1.22,
                 color: pulse.color,
-                alpha: fade * visualIntensity * 0.65
+                alpha: fade * visualIntensity * 0.4
             )
             drawRing(
                 context: context,
                 point: pulse.point,
-                radius: pulse.baseSize * (0.28 + 0.42 * eased),
-                lineWidth: lineWidth * 0.7,
+                radius: releaseRadius,
+                lineWidth: lineWidth * 0.55,
                 color: pulse.color,
-                alpha: alpha * 0.6
+                alpha: releaseAlpha
             )
+            drawCrosshair(context: context, point: pulse.point, size: pulse.baseSize * (0.16 + 0.08 * fade), color: pulse.color, alpha: releaseAlpha * 0.7)
         case .drag:
             drawDot(
                 context: context,
