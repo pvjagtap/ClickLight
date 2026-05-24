@@ -1,6 +1,6 @@
 # ClickLight
 
-ClickLight is a macOS menu bar app that highlights your clicks during live demos, so viewers can see exactly when you pressed even if the UI responds slowly.
+A macOS menu bar app that highlights your clicks during live demos, so viewers can see exactly when you pressed even if the UI responds slowly.
 
 ## Demo
 
@@ -8,7 +8,7 @@ ClickLight is a macOS menu bar app that highlights your clicks during live demos
 
 ## Install
 
-ClickLight does not have a packaged installer yet. Build it locally and copy it into your Applications folder:
+Build ClickLight locally and copy it into your Applications folder:
 
 ```bash
 chmod +x build-app.sh
@@ -18,7 +18,7 @@ cp -R ClickLight.app "$HOME/Applications/ClickLight.app"
 open "$HOME/Applications/ClickLight.app"
 ```
 
-More detail: [Installation](docs/INSTALLATION.md)
+See [Manual Install](docs/MANUAL_INSTALL.md) for the full local install flow.
 
 ## Features
 
@@ -41,13 +41,7 @@ After enabling permission, quit ClickLight from the menu bar and reopen it.
 
 ClickLight is personal software: one small presentation annoyance, fixed directly. The project is intentionally small so you or an agent can change it without much ceremony.
 
-[Local Development](docs/LOCAL_DEVELOPMENT.md)
-
-## How It Is Built
-
-ClickLight is a Swift Package Manager executable wrapped into a macOS `.app` bundle by `build-app.sh`.
-
-[Building Without Xcode](docs/BUILDING_WITHOUT_XCODE.md)
+Start with [Local Development](docs/LOCAL_DEVELOPMENT.md).
 
 ## Uninstall
 
