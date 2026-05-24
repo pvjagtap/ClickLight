@@ -2,7 +2,7 @@
 set -euo pipefail
 
 APP_NAME="ClickLight"
-BUNDLE_IDENTIFIER="dev.codex.ClickLight"
+BUNDLE_IDENTIFIER="com.aurorascharff.ClickLight"
 CONFIGURATION="${CONFIGURATION:-release}"
 NOTARIZE=false
 

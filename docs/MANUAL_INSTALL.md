@@ -53,5 +53,5 @@ open "$HOME/Applications/ClickLight.app"
 
 ```bash
 rm -rf "$HOME/Applications/ClickLight.app"
-defaults delete dev.codex.ClickLight
+defaults delete com.aurorascharff.ClickLight
 ```

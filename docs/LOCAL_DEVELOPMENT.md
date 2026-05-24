@@ -84,7 +84,7 @@ Other useful checks:
 
 ```bash
 pgrep -fl ClickLight
-defaults read dev.codex.ClickLight
+defaults read com.aurorascharff.ClickLight
 ```
 
 To remove a manually installed app and reset preferences, see [Manual Install](MANUAL_INSTALL.md#remove-manual-install).

@@ -10,7 +10,11 @@ cask "clicklight" do
 
   app "ClickLight.app"
 
+  postflight do
+    system "xattr", "-cr", "#{appdir}/ClickLight.app"
+  end
+
   zap trash: [
-    "~/Library/Preferences/dev.codex.ClickLight.plist",
+    "~/Library/Preferences/com.aurorascharff.ClickLight.plist",
   ]
 end
