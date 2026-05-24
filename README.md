@@ -1,6 +1,6 @@
 # ClickLight
 
-ClickLight is a macOS menu bar app that highlights your clicks during live demos, so viewers can see exactly when you pressed even if the UI responds slowly.
+A macOS menu bar app that highlights your clicks during live demos, so viewers can see exactly when you pressed even if the UI responds slowly.
 
 ## Demo
 
@@ -38,13 +38,13 @@ After enabling permission, quit ClickLight from the menu bar and reopen it.
 
 ClickLight is personal software: one small presentation annoyance, fixed directly. The project is intentionally small so you or an agent can change it without much ceremony.
 
-[Local Development](docs/LOCAL_DEVELOPMENT.md)
+Start with [Local Development](docs/LOCAL_DEVELOPMENT.md).
 
 ## Releasing
 
 Release scaffolding is included for Developer ID signing, notarization, Sparkle auto-updates, GitHub Releases, and a Homebrew cask.
 
-[Releasing](docs/RELEASING.md)
+See [Releasing](docs/RELEASING.md).
 
 ## Uninstall
 

@@ -29,6 +29,15 @@ For a persistent local install after your changes, follow [Manual Install](MANUA
 
 ## Build Flow
 
+`Package.swift` defines one executable target:
+
+```swift
+.executableTarget(
+    name: "ClickLight",
+    path: "Sources/ClickLight"
+)
+```
+
 `swift build -c release` compiles the binary to:
 
 ```text

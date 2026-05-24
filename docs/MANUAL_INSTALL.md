@@ -28,6 +28,16 @@ System Settings -> Privacy & Security -> Accessibility
 
 Enable `ClickLight`, then quit ClickLight from the menu bar and reopen it.
 
+## Verify
+
+Click the ClickLight menu-bar item and choose:
+
+```text
+Test Pulse at Pointer
+```
+
+If you see a pulse, the overlay is working. If normal clicks still do not show pulses, check that Accessibility permission is enabled for the same copy of `ClickLight.app` that you launched.
+
 ## Rebuild After Changes
 
 After changing source files:
