@@ -54,6 +54,7 @@ final class StatusController {
     private func rebuildMenu() {
         let settings = settingsStore.settings
         let menu = NSMenu()
+        StatusMenuConfiguration.apply(to: menu)
 
         menu.addItem(toggleItem(
             title: "Enabled",
@@ -137,6 +138,7 @@ final class StatusController {
 
         let testPulseItem = NSMenuItem(title: "Test Pulse at Pointer", action: #selector(testPulse), keyEquivalent: "")
         testPulseItem.target = self
+        testPulseItem.isEnabled = StatusMenuAvailability.isTestPulseEnabled(isClickLightEnabled: settings.isEnabled)
         menu.addItem(testPulseItem)
         menu.addItem(NSMenuItem.separator())
 
