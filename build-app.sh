@@ -26,8 +26,8 @@ BUILD_DIR="$ROOT_DIR/.build/$CONFIGURATION"
 APP_DIR="$ROOT_DIR/$APP_NAME.app"
 ZIP_PATH="$ROOT_DIR/$APP_NAME.zip"
 ICON_SOURCE="$ROOT_DIR/AppIcon.icon/Assets/ClickLight-icon.png"
+ICON_RENDER_SCRIPT="$ROOT_DIR/scripts/render-icon.swift"
 ICON_RENDERED_SOURCE="$BUILD_DIR/$APP_NAME-rendered-icon.png"
-ICON_RENDERED_SVG="$BUILD_DIR/$APP_NAME-rendered-icon.svg"
 ICONSET_DIR="$BUILD_DIR/$APP_NAME.iconset"
 
 VERSION="$(git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || echo "0.1.0")"
@@ -49,28 +49,14 @@ if [ ! -f "$ICON_SOURCE" ]; then
     exit 1
 fi
 
+if [ ! -f "$ICON_RENDER_SCRIPT" ]; then
+    echo "Missing app icon renderer: $ICON_RENDER_SCRIPT"
+    exit 1
+fi
+
 rm -rf "$ICONSET_DIR"
 mkdir -p "$ICONSET_DIR"
-ICON_IMAGE_DATA="$(base64 -i "$ICON_SOURCE" | tr -d '\n')"
-cat > "$ICON_RENDERED_SVG" <<SVG
-<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
-  <defs>
-    <linearGradient id="background" x1="50%" y1="100%" x2="50%" y2="30%">
-      <stop offset="0%" stop-color="#296bd5"/>
-      <stop offset="100%" stop-color="#2dc9fc"/>
-    </linearGradient>
-    <filter id="glyphShadow" x="-20%" y="-20%" width="140%" height="140%">
-      <feDropShadow dx="0" dy="28" stdDeviation="26" flood-color="#000" flood-opacity="0.5"/>
-    </filter>
-  </defs>
-  <rect width="1024" height="1024" rx="224" fill="url(#background)"/>
-  <g filter="url(#glyphShadow)" opacity="0.88">
-    <image href="data:image/png;base64,$ICON_IMAGE_DATA" width="1024" height="1024"/>
-  </g>
-  <path d="M112 0h800c62 0 112 50 112 112v800c0 62-50 112-112 112H112C50 1024 0 974 0 912V112C0 50 50 0 112 0Z" fill="#fff" opacity="0.16"/>
-</svg>
-SVG
-rsvg-convert -w 1024 -h 1024 "$ICON_RENDERED_SVG" -o "$ICON_RENDERED_SOURCE"
+swift "$ICON_RENDER_SCRIPT" "$ICON_SOURCE" "$ICON_RENDERED_SOURCE"
 sips -z 16 16 "$ICON_RENDERED_SOURCE" --out "$ICONSET_DIR/icon_16x16.png" >/dev/null
 sips -z 32 32 "$ICON_RENDERED_SOURCE" --out "$ICONSET_DIR/icon_16x16@2x.png" >/dev/null
 sips -z 32 32 "$ICON_RENDERED_SOURCE" --out "$ICONSET_DIR/icon_32x32.png" >/dev/null
