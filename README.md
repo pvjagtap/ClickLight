@@ -18,10 +18,16 @@ Screen recorders like Screen Studio and CleanShot can add click effects to recor
 
 ## Install
 
+With Homebrew:
+
 ```bash
 brew tap aurorascharff/clicklight https://github.com/aurorascharff/ClickLight
 brew install --cask aurorascharff/clicklight/clicklight
 ```
+
+Homebrew installs are updated with `brew upgrade --cask clicklight`.
+
+Prefer not to use Homebrew? Download `ClickLight.zip` from [GitHub Releases](https://github.com/aurorascharff/ClickLight/releases).
 
 > **Manual install**
 > If you want to build ClickLight from source or iterate on it locally, use [Manual Install](docs/MANUAL_INSTALL.md).
