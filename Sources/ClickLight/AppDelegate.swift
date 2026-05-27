@@ -24,10 +24,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let eventTap = ClickEventTap()
     private let permissions = PermissionController()
     private let launchAtLogin = LaunchAtLoginController()
+    private var captureEnabledState: Bool?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         overlayCoordinator.start()
         permissions.requestAccessibilityIfNeeded()
+        captureEnabledState = settingsStore.settings.isEnabled
         captureController.startIfEnabled()
         statusController.start()
 
@@ -51,6 +53,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func settingsDidChange() {
         overlayCoordinator.refreshSettings()
+        let isEnabled = settingsStore.settings.isEnabled
+        guard captureEnabledState != isEnabled else { return }
+        captureEnabledState = isEnabled
         captureController.refreshEnabledState()
     }
 

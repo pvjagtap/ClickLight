@@ -12,6 +12,7 @@ final class StatusController {
     private let onOpenSettings: () -> Void
     private let onTestPulse: () -> Void
     private let onQuit: () -> Void
+    private var pendingMenuRebuild: DispatchWorkItem?
 
     init(
         settingsStore: SettingsStore,
@@ -51,7 +52,12 @@ final class StatusController {
 
     @objc private func settingsDidChange() {
         applyStatusItemAppearance(settingsStore.settings)
-        rebuildMenu()
+        pendingMenuRebuild?.cancel()
+        let workItem = DispatchWorkItem { [weak self] in
+            self?.rebuildMenu()
+        }
+        pendingMenuRebuild = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1, execute: workItem)
     }
 
     private func rebuildMenu() {
