@@ -18,7 +18,7 @@ struct ClickSettings: Equatable {
         showRelease: true,
         showRightClick: true,
         showDrag: true,
-        showMenuBarText: true,
+        showMenuBarText: false,
         size: 64,
         intensity: 0.7,
         duration: 0.48,
