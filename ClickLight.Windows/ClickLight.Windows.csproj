@@ -10,7 +10,7 @@
     <ApplicationIcon Condition="Exists('Assets\clicklight.ico')">Assets\clicklight.ico</ApplicationIcon>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>1.2.0</Version>
+    <Version>1.3.0</Version>
     <Description>Click highlight overlay for live demos and screen sharing on Windows</Description>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>

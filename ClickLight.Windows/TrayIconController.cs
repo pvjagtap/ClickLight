@@ -62,6 +62,7 @@ public sealed class TrayIconController : IDisposable
         AddToggle(menu, "Show Press", settings.ShowPress, s => s.ShowPress = !s.ShowPress);
         AddToggle(menu, "Show Release", settings.ShowRelease, s => s.ShowRelease = !s.ShowRelease);
         AddToggle(menu, "Show Right-Click", settings.ShowRightClick, s => s.ShowRightClick = !s.ShowRightClick);
+        AddToggle(menu, "Show Middle-Click", settings.ShowMiddleClick, s => s.ShowMiddleClick = !s.ShowMiddleClick);
         var showDragItem = new ToolStripMenuItem(settings.ShowDrag ? "✓ Show Drag" : "  Show Drag");
         showDragItem.Enabled = !settings.ShowLaserPointer;
         showDragItem.Click += (_, _) => _settingsStore.Update(s => s.ShowDrag = !s.ShowDrag);

@@ -9,9 +9,10 @@ public enum ClickKind
     LeftUp,
     RightDown,
     RightUp,
+    MiddleDown,
+    MiddleUp,
     Drag,
-    Move,
-    FileDrag
+    Move
 }
 
 /// <summary>

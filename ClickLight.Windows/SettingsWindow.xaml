@@ -36,6 +36,7 @@
         <CheckBox x:Name="ShowPressCheck" Content="Show Press"/>
         <CheckBox x:Name="ShowReleaseCheck" Content="Show Release"/>
         <CheckBox x:Name="ShowRightClickCheck" Content="Show Right-Click"/>
+        <CheckBox x:Name="ShowMiddleClickCheck" Content="Show Middle-Click"/>
         <CheckBox x:Name="ShowDragCheck" Content="Show Drag"/>
 
         <!-- Size -->
@@ -61,6 +62,33 @@
         <StackPanel Orientation="Horizontal">
             <ComboBox x:Name="ColorCombo" Width="160"/>
             <Button x:Name="CustomColorButton" Content="Pick Custom..." Padding="8,4" Margin="8,0,0,0"/>
+        </StackPanel>
+
+        <!-- Custom color mode (visible only when Custom preset selected) -->
+        <StackPanel x:Name="CustomColorModePanel" Margin="0,8,0,0" Visibility="Collapsed">
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                <TextBlock Text="Mode: " VerticalAlignment="Center"/>
+                <ComboBox x:Name="CustomColorModeCombo" Width="120"/>
+            </StackPanel>
+            <!-- Per-click color buttons (visible only in ByClick mode) -->
+            <StackPanel x:Name="PerClickColorPanel" Margin="0,4,0,0" Visibility="Collapsed">
+                <StackPanel Orientation="Horizontal" Margin="0,2">
+                    <TextBlock Text="Left Click:" Width="80" VerticalAlignment="Center"/>
+                    <Button x:Name="LeftColorButton" Content="  " Width="40" Padding="4,2"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,2">
+                    <TextBlock Text="Right Click:" Width="80" VerticalAlignment="Center"/>
+                    <Button x:Name="RightColorButton" Content="  " Width="40" Padding="4,2"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,2">
+                    <TextBlock Text="Middle Click:" Width="80" VerticalAlignment="Center"/>
+                    <Button x:Name="MiddleColorButton" Content="  " Width="40" Padding="4,2"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,2">
+                    <TextBlock Text="Drag:" Width="80" VerticalAlignment="Center"/>
+                    <Button x:Name="DragColorButton" Content="  " Width="40" Padding="4,2"/>
+                </StackPanel>
+            </StackPanel>
         </StackPanel>
 
         <!-- Buttons -->

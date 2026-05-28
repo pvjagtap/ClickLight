@@ -31,6 +31,7 @@ public partial class SettingsWindow : Window
         ShowPressCheck.IsChecked = s.ShowPress;
         ShowReleaseCheck.IsChecked = s.ShowRelease;
         ShowRightClickCheck.IsChecked = s.ShowRightClick;
+        ShowMiddleClickCheck.IsChecked = s.ShowMiddleClick;
         ShowDragCheck.IsChecked = s.ShowDrag;
         ShowDragCheck.IsEnabled = !s.ShowLaserPointer;
 
@@ -58,6 +59,22 @@ public partial class SettingsWindow : Window
             }
         }
 
+        // Custom color mode
+        CustomColorModeCombo.Items.Clear();
+        foreach (CustomColorMode mode in Enum.GetValues<CustomColorMode>())
+            CustomColorModeCombo.Items.Add(new ComboBoxItem { Content = mode.DisplayName(), Tag = mode });
+        for (int i = 0; i < CustomColorModeCombo.Items.Count; i++)
+        {
+            if (((ComboBoxItem)CustomColorModeCombo.Items[i]).Tag is CustomColorMode m && m == s.CustomColorMode)
+            {
+                CustomColorModeCombo.SelectedIndex = i;
+                break;
+            }
+        }
+
+        UpdateCustomColorVisibility(s);
+        UpdatePerClickColorButtons(s);
+
         _suppressEvents = false;
     }
 
@@ -75,6 +92,8 @@ public partial class SettingsWindow : Window
         ShowReleaseCheck.Unchecked += (_, _) => SaveIfReady(s => s.ShowRelease = false);
         ShowRightClickCheck.Checked += (_, _) => SaveIfReady(s => s.ShowRightClick = true);
         ShowRightClickCheck.Unchecked += (_, _) => SaveIfReady(s => s.ShowRightClick = false);
+        ShowMiddleClickCheck.Checked += (_, _) => SaveIfReady(s => s.ShowMiddleClick = true);
+        ShowMiddleClickCheck.Unchecked += (_, _) => SaveIfReady(s => s.ShowMiddleClick = false);
         ShowDragCheck.Checked += (_, _) => SaveIfReady(s => s.ShowDrag = true);
         ShowDragCheck.Unchecked += (_, _) => SaveIfReady(s => s.ShowDrag = false);
 
@@ -109,11 +128,31 @@ public partial class SettingsWindow : Window
 
         ColorCombo.SelectionChanged += (_, _) =>
         {
+            if (_suppressEvents) return;
             if (ColorCombo.SelectedItem is ComboBoxItem item && item.Tag is ColorPreset preset)
+            {
                 SaveIfReady(s => s.ColorPreset = preset);
+                UpdateCustomColorVisibility(_settingsStore.Settings);
+            }
+        };
+
+        CustomColorModeCombo.SelectionChanged += (_, _) =>
+        {
+            if (_suppressEvents) return;
+            if (CustomColorModeCombo.SelectedItem is ComboBoxItem item && item.Tag is CustomColorMode mode)
+            {
+                SaveIfReady(s => s.CustomColorMode = mode);
+                PerClickColorPanel.Visibility = mode == CustomColorMode.ByClick
+                    ? Visibility.Visible : Visibility.Collapsed;
+            }
         };
 
         CustomColorButton.Click += (_, _) => PickCustomColor();
+
+        LeftColorButton.Click += (_, _) => PickPerClickColor("Left Click", c => _settingsStore.Update(s => s.CustomLeftColor = c));
+        RightColorButton.Click += (_, _) => PickPerClickColor("Right Click", c => _settingsStore.Update(s => s.CustomRightColor = c));
+        MiddleColorButton.Click += (_, _) => PickPerClickColor("Middle Click", c => _settingsStore.Update(s => s.CustomMiddleColor = c));
+        DragColorButton.Click += (_, _) => PickPerClickColor("Drag", c => _settingsStore.Update(s => s.CustomDragColor = c));
 
         TestButton.Click += (_, _) => _overlayCoordinator.TestPulse();
         ResetButton.Click += (_, _) =>
@@ -140,11 +179,41 @@ public partial class SettingsWindow : Window
                 s.ColorPreset = ColorPreset.Custom;
                 s.CustomColor = System.Windows.Media.Color.FromRgb(picked.R, picked.G, picked.B);
             });
-            // Update combo to deselect presets (custom isn't in the list)
             _suppressEvents = true;
             ColorCombo.SelectedIndex = -1;
             _suppressEvents = false;
+            UpdateCustomColorVisibility(_settingsStore.Settings);
         }
+    }
+
+    private void PickPerClickColor(string label, Action<System.Windows.Media.Color> apply)
+    {
+        var dialog = new ColorDialog { FullOpen = true };
+        if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+        {
+            var picked = dialog.Color;
+            apply(System.Windows.Media.Color.FromRgb(picked.R, picked.G, picked.B));
+            UpdatePerClickColorButtons(_settingsStore.Settings);
+        }
+    }
+
+    private void UpdateCustomColorVisibility(ClickSettings s)
+    {
+        var isCustom = s.ColorPreset == ColorPreset.Custom;
+        CustomColorModePanel.Visibility = isCustom ? Visibility.Visible : Visibility.Collapsed;
+        if (isCustom)
+        {
+            PerClickColorPanel.Visibility = s.CustomColorMode == CustomColorMode.ByClick
+                ? Visibility.Visible : Visibility.Collapsed;
+        }
+    }
+
+    private void UpdatePerClickColorButtons(ClickSettings s)
+    {
+        LeftColorButton.Background = new System.Windows.Media.SolidColorBrush(s.CustomLeftColor);
+        RightColorButton.Background = new System.Windows.Media.SolidColorBrush(s.CustomRightColor);
+        MiddleColorButton.Background = new System.Windows.Media.SolidColorBrush(s.CustomMiddleColor);
+        DragColorButton.Background = new System.Windows.Media.SolidColorBrush(s.CustomDragColor);
     }
 
     private void SaveIfReady(Action<ClickSettings> mutate)

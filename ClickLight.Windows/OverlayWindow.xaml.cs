@@ -31,11 +31,6 @@ public partial class OverlayWindow : Window
     private const double LaserStrokeFadeDuration = 0.9;
     private static readonly Color LaserColor = Color.FromRgb(255, 41, 61);
 
-    // File drag trail constants
-    private const double TrailDotFadeDuration = 0.6;
-    private const double TrailDotSize = 10;
-    private static readonly Color TrailColor = Color.FromRgb(0, 189, 255);
-
     [DllImport("user32.dll", EntryPoint = "GetWindowLongPtr")]
     private static extern IntPtr GetWindowLongPtr64(IntPtr hwnd, int index);
 
@@ -108,10 +103,6 @@ public partial class OverlayWindow : Window
     private readonly List<(System.Windows.Shapes.Polyline Line, System.Windows.Shapes.Polyline Glow, double CompletedAt)> _completedLaserStrokes = new();
     private System.Windows.Threading.DispatcherTimer? _laserTimer;
 
-    // File drag trail state
-    private readonly List<(Ellipse Dot, double CenterX, double CenterY, double CreatedAt)> _trailDots = new();
-    private System.Windows.Threading.DispatcherTimer? _trailTimer;
-
     public void ShowPulse(ClickEvent clickEvent, ClickSettings settings)
     {
         // Guard against excessive element accumulation (auto-clicker / rapid fire)
@@ -143,24 +134,20 @@ public partial class OverlayWindow : Window
                     ShowLaserCursor(localX, localY);
                     return;
                 case ClickKind.Drag:
+                    RemoveDragRect();
                     AppendLaserPoint(localX, localY);
                     return;
                 case ClickKind.LeftUp:
                 case ClickKind.RightUp:
+                case ClickKind.MiddleUp:
                     CompleteLaserStroke();
                     break;
                 case ClickKind.LeftDown:
                 case ClickKind.RightDown:
+                case ClickKind.MiddleDown:
+                    RemoveDragRect();
                     break;
             }
-        }
-
-        // File drag → show disappearing dot trail instead of rectangle
-        if (clickEvent.Kind == ClickKind.FileDrag)
-        {
-            RemoveDragRect();
-            ShowTrailDot(localX, localY, settings);
-            return;
         }
 
         // Skip pulse rendering for event types that shouldn't show
@@ -187,6 +174,12 @@ public partial class OverlayWindow : Window
             case ClickKind.RightUp:
                 AnimateReleasePulse(localX, localY, baseSize * 0.82, duration, intensity * 0.5, color, showCrosshair: true);
                 break;
+            case ClickKind.MiddleDown:
+                AnimateRingPulse(localX, localY, baseSize, duration, intensity, color, showDiamond: true);
+                break;
+            case ClickKind.MiddleUp:
+                AnimateReleasePulse(localX, localY, baseSize * 0.82, duration, intensity * 0.5, color, showDiamond: true);
+                break;
             case ClickKind.Drag:
                 UpdateDragRect(clickEvent, settings, color, intensity);
                 break;
@@ -197,9 +190,12 @@ public partial class OverlayWindow : Window
     {
         ClickKind.LeftDown => settings.ShowPress,
         ClickKind.LeftUp => settings.ShowRelease,
-        ClickKind.RightDown or ClickKind.RightUp => settings.ShowRightClick,
+        ClickKind.RightDown => settings.ShowRightClick,
+        ClickKind.RightUp => settings.ShowRightClick && settings.ShowRelease,
+        ClickKind.MiddleDown => settings.ShowMiddleClick,
+        ClickKind.MiddleUp => settings.ShowMiddleClick && settings.ShowRelease,
         ClickKind.Drag => settings.ShowDrag && !settings.ShowLaserPointer,
-        ClickKind.Move or ClickKind.FileDrag => false,
+        ClickKind.Move => false,
         _ => true
     };
 
@@ -472,76 +468,9 @@ public partial class OverlayWindow : Window
         _laserTimer = null;
     }
 
-    // ─── File Drag Trail Methods ──────────────────────────────────────────
-
-    private void ShowTrailDot(double x, double y, ClickSettings settings)
-    {
-        var color = GetColor(ClickKind.FileDrag, settings);
-        var intensity = Math.Max(0.15, Math.Min(1.35, settings.Intensity));
-
-        var dot = new Ellipse
-        {
-            Width = TrailDotSize,
-            Height = TrailDotSize,
-            Fill = new SolidColorBrush(color) { Opacity = intensity * 0.7 },
-            IsHitTestVisible = false
-        };
-        System.Windows.Controls.Canvas.SetLeft(dot, x - TrailDotSize / 2);
-        System.Windows.Controls.Canvas.SetTop(dot, y - TrailDotSize / 2);
-        OverlayCanvas.Children.Add(dot);
-
-        _trailDots.Add((dot, x, y, GetTime()));
-        StartTrailTimer();
-    }
-
-    private void StartTrailTimer()
-    {
-        if (_trailTimer != null) return;
-        _trailTimer = new System.Windows.Threading.DispatcherTimer
-        {
-            Interval = TimeSpan.FromMilliseconds(16)
-        };
-        _trailTimer.Tick += TrailTimerTick;
-        _trailTimer.Start();
-    }
-
-    private void TrailTimerTick(object? sender, EventArgs e)
-    {
-        var now = GetTime();
-
-        for (int i = _trailDots.Count - 1; i >= 0; i--)
-        {
-            var (dot, cx, cy, createdAt) = _trailDots[i];
-            var elapsed = now - createdAt;
-            if (elapsed >= TrailDotFadeDuration)
-            {
-                OverlayCanvas.Children.Remove(dot);
-                _trailDots.RemoveAt(i);
-            }
-            else
-            {
-                var alpha = 1.0 - (elapsed / TrailDotFadeDuration);
-                dot.Opacity = alpha * 0.7;
-                // Shrink toward center as it fades
-                var scale = 0.5 + 0.5 * alpha;
-                var size = TrailDotSize * scale;
-                dot.Width = size;
-                dot.Height = size;
-                System.Windows.Controls.Canvas.SetLeft(dot, cx - size / 2);
-                System.Windows.Controls.Canvas.SetTop(dot, cy - size / 2);
-            }
-        }
-
-        if (_trailDots.Count == 0)
-        {
-            _trailTimer?.Stop();
-            _trailTimer = null;
-        }
-    }
-
     private static double GetTime() => Stopwatch.GetTimestamp() / (double)Stopwatch.Frequency;
 
-    private void AnimateRingPulse(double x, double y, double size, double duration, double intensity, Color color, bool showDot = false, bool showCrosshair = false)
+    private void AnimateRingPulse(double x, double y, double size, double duration, double intensity, Color color, bool showDot = false, bool showCrosshair = false, bool showDiamond = false)
     {
         var startRadius = size * 0.18;
         var endRadius = size * 0.8;
@@ -570,9 +499,15 @@ public partial class OverlayWindow : Window
         {
             AnimateCrosshair(x, y, size * 0.28, duration, color, (0.18 + intensity * 0.78) * 0.85);
         }
+
+        // Diamond for middle-click
+        if (showDiamond)
+        {
+            AnimateDiamond(x, y, size * 0.24, duration, color, (0.18 + intensity * 0.78) * 0.86);
+        }
     }
 
-    private void AnimateReleasePulse(double x, double y, double size, double duration, double intensity, Color color, bool showDot = false, bool showCrosshair = false)
+    private void AnimateReleasePulse(double x, double y, double size, double duration, double intensity, Color color, bool showDot = false, bool showCrosshair = false, bool showDiamond = false)
     {
         var startRadius = size * 0.76;
         var endRadius = size * 0.34;
@@ -590,6 +525,11 @@ public partial class OverlayWindow : Window
         if (showCrosshair)
         {
             AnimateCrosshair(x, y, size * 0.2, duration, color, intensity * 0.7);
+        }
+
+        if (showDiamond)
+        {
+            AnimateDiamond(x, y, size * 0.18, duration, color, intensity * 0.82);
         }
     }
 
@@ -616,6 +556,25 @@ public partial class OverlayWindow : Window
 
         AnimateFadeOut(hLine, duration);
         AnimateFadeOut(vLine, duration);
+    }
+
+    private void AnimateDiamond(double x, double y, double size, double duration, Color color, double opacity)
+    {
+        var diamond = new System.Windows.Shapes.Polygon
+        {
+            Points = new PointCollection
+            {
+                new System.Windows.Point(x, y - size),
+                new System.Windows.Point(x + size, y),
+                new System.Windows.Point(x, y + size),
+                new System.Windows.Point(x - size, y)
+            },
+            Fill = new SolidColorBrush(color),
+            Opacity = Math.Max(0, Math.Min(1, opacity)),
+            IsHitTestVisible = false
+        };
+        OverlayCanvas.Children.Add(diamond);
+        AnimateFadeOut(diamond, duration);
     }
 
     private Ellipse CreateEllipse(double cx, double cy, double radius, double strokeWidth, Color color, double opacity)
@@ -712,7 +671,20 @@ public partial class OverlayWindow : Window
     private static Color GetColor(ClickKind kind, ClickSettings settings)
     {
         if (settings.ColorPreset == ColorPreset.Custom)
-            return settings.CustomColor;
+        {
+            return settings.CustomColorMode switch
+            {
+                CustomColorMode.ByClick => kind switch
+                {
+                    ClickKind.LeftDown or ClickKind.LeftUp => settings.CustomLeftColor,
+                    ClickKind.RightDown or ClickKind.RightUp => settings.CustomRightColor,
+                    ClickKind.MiddleDown or ClickKind.MiddleUp => settings.CustomMiddleColor,
+                    ClickKind.Drag => settings.CustomDragColor,
+                    _ => settings.CustomColor
+                },
+                _ => settings.CustomColor
+            };
+        }
 
         var presetColor = settings.ColorPreset.GetColor();
         if (presetColor.HasValue)
@@ -723,8 +695,8 @@ public partial class OverlayWindow : Window
             ClickKind.LeftDown => Color.FromRgb(0, 189, 255),
             ClickKind.LeftUp => Color.FromRgb(102, 224, 255),
             ClickKind.RightDown or ClickKind.RightUp => Color.FromRgb(255, 117, 48),
+            ClickKind.MiddleDown or ClickKind.MiddleUp => Color.FromRgb(69, 235, 148),
             ClickKind.Drag => Color.FromRgb(235, 214, 56),
-            ClickKind.FileDrag => TrailColor,
             ClickKind.Move => Colors.Transparent,
             _ => Color.FromRgb(0, 189, 255)
         };
@@ -733,16 +705,16 @@ public partial class OverlayWindow : Window
     private static double GetSize(ClickKind kind, ClickSettings settings) => kind switch
     {
         ClickKind.Drag => settings.Size * 0.6,
-        ClickKind.Move or ClickKind.FileDrag => 0,
-        ClickKind.LeftUp or ClickKind.RightUp => settings.Size * 0.82,
+        ClickKind.Move => 0,
+        ClickKind.LeftUp or ClickKind.RightUp or ClickKind.MiddleUp => settings.Size * 0.82,
         _ => settings.Size
     };
 
     private static double GetDuration(ClickKind kind, ClickSettings settings) => kind switch
     {
         ClickKind.Drag => Math.Min(0.38, settings.Duration * 0.82),
-        ClickKind.Move or ClickKind.FileDrag => 0,
-        ClickKind.LeftUp or ClickKind.RightUp => settings.Duration * 0.78,
+        ClickKind.Move => 0,
+        ClickKind.LeftUp or ClickKind.RightUp or ClickKind.MiddleUp => settings.Duration * 0.78,
         _ => settings.Duration
     };
 }
