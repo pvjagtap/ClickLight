@@ -57,10 +57,15 @@ public sealed class TrayIconController : IDisposable
         menu.Items.Add(new ToolStripSeparator());
 
         // Click type toggles
+        AddToggle(menu, "Laser Pointer Mode", settings.ShowLaserPointer, s => s.ShowLaserPointer = !s.ShowLaserPointer);
+        menu.Items.Add(new ToolStripSeparator());
         AddToggle(menu, "Show Press", settings.ShowPress, s => s.ShowPress = !s.ShowPress);
         AddToggle(menu, "Show Release", settings.ShowRelease, s => s.ShowRelease = !s.ShowRelease);
         AddToggle(menu, "Show Right-Click", settings.ShowRightClick, s => s.ShowRightClick = !s.ShowRightClick);
-        AddToggle(menu, "Show Drag", settings.ShowDrag, s => s.ShowDrag = !s.ShowDrag);
+        var showDragItem = new ToolStripMenuItem(settings.ShowDrag ? "✓ Show Drag" : "  Show Drag");
+        showDragItem.Enabled = !settings.ShowLaserPointer;
+        showDragItem.Click += (_, _) => _settingsStore.Update(s => s.ShowDrag = !s.ShowDrag);
+        menu.Items.Add(showDragItem);
         menu.Items.Add(new ToolStripSeparator());
 
         // Size presets

@@ -27,10 +27,12 @@ public partial class SettingsWindow : Window
 
         EnabledCheck.IsChecked = s.IsEnabled;
         LaunchAtLoginCheck.IsChecked = LaunchAtLoginController.IsEnabled;
+        ShowLaserPointerCheck.IsChecked = s.ShowLaserPointer;
         ShowPressCheck.IsChecked = s.ShowPress;
         ShowReleaseCheck.IsChecked = s.ShowRelease;
         ShowRightClickCheck.IsChecked = s.ShowRightClick;
         ShowDragCheck.IsChecked = s.ShowDrag;
+        ShowDragCheck.IsEnabled = !s.ShowLaserPointer;
 
         SizeSlider.Value = s.Size;
         SizeLabel.Text = $"{s.Size:F0}";
@@ -75,6 +77,17 @@ public partial class SettingsWindow : Window
         ShowRightClickCheck.Unchecked += (_, _) => SaveIfReady(s => s.ShowRightClick = false);
         ShowDragCheck.Checked += (_, _) => SaveIfReady(s => s.ShowDrag = true);
         ShowDragCheck.Unchecked += (_, _) => SaveIfReady(s => s.ShowDrag = false);
+
+        ShowLaserPointerCheck.Checked += (_, _) =>
+        {
+            SaveIfReady(s => s.ShowLaserPointer = true);
+            ShowDragCheck.IsEnabled = false;
+        };
+        ShowLaserPointerCheck.Unchecked += (_, _) =>
+        {
+            SaveIfReady(s => s.ShowLaserPointer = false);
+            ShowDragCheck.IsEnabled = true;
+        };
 
         SizeSlider.ValueChanged += (_, e) =>
         {

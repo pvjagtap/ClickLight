@@ -40,8 +40,8 @@ public sealed class OverlayCoordinator
         var settings = _settingsStore.Settings;
         if (!settings.IsEnabled) return;
         if (!ShouldShow(clickEvent.Kind, settings)) return;
-        // Skip duplicate detection for Drag — the rectangle is continuously updated
-        if (clickEvent.Kind != ClickKind.Drag && !ShouldAccept(clickEvent)) return;
+        // Skip duplicate detection for Drag and Move — continuously updated
+        if (clickEvent.Kind != ClickKind.Drag && clickEvent.Kind != ClickKind.Move && !ShouldAccept(clickEvent)) return;
 
         var screenKey = GetScreenKey(clickEvent.X, clickEvent.Y);
         if (screenKey != null && _overlays.TryGetValue(screenKey, out var overlay))
@@ -58,7 +58,12 @@ public sealed class OverlayCoordinator
 
     private void OnSettingsChanged()
     {
-        // Settings are applied per-pulse, no window rebuild needed
+        // Clear laser visuals when laser pointer mode is turned off
+        if (!_settingsStore.Settings.ShowLaserPointer)
+        {
+            foreach (var overlay in _overlays.Values)
+                overlay.ClearLaser();
+        }
     }
 
     private void OnDisplaySettingsChanged(object? sender, EventArgs e)
@@ -92,7 +97,8 @@ public sealed class OverlayCoordinator
         ClickKind.LeftDown => settings.ShowPress,
         ClickKind.LeftUp => settings.ShowRelease,
         ClickKind.RightDown or ClickKind.RightUp => settings.ShowRightClick,
-        ClickKind.Drag => settings.ShowDrag,
+        ClickKind.Drag => settings.ShowDrag || settings.ShowLaserPointer,
+        ClickKind.Move => settings.ShowLaserPointer,
         _ => false
     };
 

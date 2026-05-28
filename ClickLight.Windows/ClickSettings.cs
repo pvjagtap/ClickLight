@@ -12,6 +12,7 @@ public class ClickSettings
     public bool ShowRelease { get; set; } = true;
     public bool ShowRightClick { get; set; } = true;
     public bool ShowDrag { get; set; } = true;
+    public bool ShowLaserPointer { get; set; } = false;
     public double Size { get; set; } = 64;
     public double Intensity { get; set; } = 0.7;
     public double Duration { get; set; } = 0.48;

@@ -140,6 +140,15 @@ public sealed class MouseHookController : IDisposable
                             FireDragEvent(x, y, now);
                         }
                     }
+                    else if (_settingsStore.Settings.ShowLaserPointer)
+                    {
+                        var elapsed = DateTime.UtcNow - _lastDragTime;
+                        if (elapsed > DragThrottle)
+                        {
+                            _lastDragTime = DateTime.UtcNow;
+                            FireEvent(ClickKind.Move, x, y, now);
+                        }
+                    }
                     break;
             }
         }

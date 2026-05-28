@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
@@ -24,6 +25,11 @@ public partial class OverlayWindow : Window
 
     // Max simultaneous canvas children to prevent memory runaway from rapid clicking
     private const int MaxCanvasChildren = 200;
+
+    // Laser pointer constants
+    private const double LaserCursorFadeDuration = 0.42;
+    private const double LaserStrokeFadeDuration = 0.9;
+    private static readonly Color LaserColor = Color.FromRgb(255, 41, 61);
 
     [DllImport("user32.dll", EntryPoint = "GetWindowLongPtr")]
     private static extern IntPtr GetWindowLongPtr64(IntPtr hwnd, int index);
@@ -86,6 +92,17 @@ public partial class OverlayWindow : Window
     // The active drag rectangle element — removed/replaced each drag event
     private System.Windows.Shapes.Rectangle? _dragRect;
 
+    // Laser pointer state
+    private System.Windows.Point? _laserCursorPoint;
+    private double _laserCursorUpdatedAt;
+    private Ellipse? _laserGlow;
+    private Ellipse? _laserDot;
+    private List<System.Windows.Point>? _activeLaserStrokePoints;
+    private System.Windows.Shapes.Polyline? _activeLaserStrokeLine;
+    private System.Windows.Shapes.Polyline? _activeLaserStrokeGlow;
+    private readonly List<(System.Windows.Shapes.Polyline Line, System.Windows.Shapes.Polyline Glow, double CompletedAt)> _completedLaserStrokes = new();
+    private System.Windows.Threading.DispatcherTimer? _laserTimer;
+
     public void ShowPulse(ClickEvent clickEvent, ClickSettings settings)
     {
         // Guard against excessive element accumulation (auto-clicker / rapid fire)
@@ -107,6 +124,30 @@ public partial class OverlayWindow : Window
             // Window not fully connected to presentation source yet — skip this pulse
             return;
         }
+
+        // Laser pointer mode handling
+        if (settings.ShowLaserPointer)
+        {
+            switch (clickEvent.Kind)
+            {
+                case ClickKind.Move:
+                    ShowLaserCursor(localX, localY);
+                    return;
+                case ClickKind.Drag:
+                    AppendLaserPoint(localX, localY);
+                    return;
+                case ClickKind.LeftUp:
+                case ClickKind.RightUp:
+                    CompleteLaserStroke();
+                    break;
+                case ClickKind.LeftDown:
+                case ClickKind.RightDown:
+                    break;
+            }
+        }
+
+        // Skip pulse rendering for event types that shouldn't show
+        if (!ShouldShowPulse(clickEvent.Kind, settings)) return;
 
         var color = GetColor(clickEvent.Kind, settings);
         var baseSize = GetSize(clickEvent.Kind, settings);
@@ -134,6 +175,16 @@ public partial class OverlayWindow : Window
                 break;
         }
     }
+
+    private static bool ShouldShowPulse(ClickKind kind, ClickSettings settings) => kind switch
+    {
+        ClickKind.LeftDown => settings.ShowPress,
+        ClickKind.LeftUp => settings.ShowRelease,
+        ClickKind.RightDown or ClickKind.RightUp => settings.ShowRightClick,
+        ClickKind.Drag => settings.ShowDrag && !settings.ShowLaserPointer,
+        ClickKind.Move => false,
+        _ => true
+    };
 
     /// <summary>
     /// Draws/updates a live rectangle from drag start to current cursor position.
@@ -211,6 +262,200 @@ public partial class OverlayWindow : Window
         fadeAnim.Completed += (_, _) => OverlayCanvas.Children.Remove(rect);
         rect.BeginAnimation(OpacityProperty, fadeAnim);
     }
+
+    // ─── Laser Pointer Methods ────────────────────────────────────────────
+
+    private void ShowLaserCursor(double x, double y)
+    {
+        _laserCursorPoint = new System.Windows.Point(x, y);
+        _laserCursorUpdatedAt = GetTime();
+
+        if (_laserGlow == null)
+        {
+            _laserGlow = new Ellipse
+            {
+                Width = 28, Height = 28,
+                Fill = new SolidColorBrush(LaserColor) { Opacity = 0.18 },
+                IsHitTestVisible = false
+            };
+            OverlayCanvas.Children.Add(_laserGlow);
+        }
+        if (_laserDot == null)
+        {
+            _laserDot = new Ellipse
+            {
+                Width = 12, Height = 12,
+                Fill = new SolidColorBrush(LaserColor),
+                IsHitTestVisible = false
+            };
+            OverlayCanvas.Children.Add(_laserDot);
+        }
+
+        System.Windows.Controls.Canvas.SetLeft(_laserGlow, x - 14);
+        System.Windows.Controls.Canvas.SetTop(_laserGlow, y - 14);
+        System.Windows.Controls.Canvas.SetLeft(_laserDot, x - 6);
+        System.Windows.Controls.Canvas.SetTop(_laserDot, y - 6);
+        _laserGlow.Opacity = 1;
+        _laserDot.Opacity = 1;
+
+        StartLaserTimer();
+    }
+
+    private void AppendLaserPoint(double x, double y)
+    {
+        ShowLaserCursor(x, y);
+
+        var point = new System.Windows.Point(x, y);
+
+        if (_activeLaserStrokePoints == null)
+        {
+            _activeLaserStrokePoints = new List<System.Windows.Point> { point };
+
+            _activeLaserStrokeLine = new System.Windows.Shapes.Polyline
+            {
+                Stroke = new SolidColorBrush(LaserColor) { Opacity = 0.95 },
+                StrokeThickness = 5,
+                StrokeLineJoin = PenLineJoin.Round,
+                StrokeStartLineCap = PenLineCap.Round,
+                StrokeEndLineCap = PenLineCap.Round,
+                IsHitTestVisible = false
+            };
+            _activeLaserStrokeGlow = new System.Windows.Shapes.Polyline
+            {
+                Stroke = new SolidColorBrush(LaserColor) { Opacity = 0.2 },
+                StrokeThickness = 14,
+                StrokeLineJoin = PenLineJoin.Round,
+                StrokeStartLineCap = PenLineCap.Round,
+                StrokeEndLineCap = PenLineCap.Round,
+                IsHitTestVisible = false
+            };
+            OverlayCanvas.Children.Add(_activeLaserStrokeGlow);
+            OverlayCanvas.Children.Add(_activeLaserStrokeLine);
+        }
+        else
+        {
+            var last = _activeLaserStrokePoints[^1];
+            var dist = Math.Sqrt(Math.Pow(last.X - x, 2) + Math.Pow(last.Y - y, 2));
+            if (dist < 2.5) return;
+            _activeLaserStrokePoints.Add(point);
+        }
+
+        _activeLaserStrokeLine!.Points = new PointCollection(_activeLaserStrokePoints);
+        _activeLaserStrokeGlow!.Points = new PointCollection(_activeLaserStrokePoints);
+    }
+
+    private void CompleteLaserStroke()
+    {
+        if (_activeLaserStrokeLine == null || _activeLaserStrokeGlow == null || _activeLaserStrokePoints == null)
+            return;
+
+        _completedLaserStrokes.Add((_activeLaserStrokeLine, _activeLaserStrokeGlow, GetTime()));
+        _activeLaserStrokeLine = null;
+        _activeLaserStrokeGlow = null;
+        _activeLaserStrokePoints = null;
+
+        StartLaserTimer();
+    }
+
+    private void StartLaserTimer()
+    {
+        if (_laserTimer != null) return;
+        _laserTimer = new System.Windows.Threading.DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(16)
+        };
+        _laserTimer.Tick += LaserTimerTick;
+        _laserTimer.Start();
+    }
+
+    private void LaserTimerTick(object? sender, EventArgs e)
+    {
+        var now = GetTime();
+        var anyActive = false;
+
+        // Fade laser cursor
+        if (_laserCursorPoint.HasValue)
+        {
+            var elapsed = now - _laserCursorUpdatedAt;
+            if (elapsed >= LaserCursorFadeDuration)
+            {
+                RemoveLaserCursor();
+            }
+            else
+            {
+                var alpha = 1.0 - (elapsed / LaserCursorFadeDuration);
+                if (_laserGlow != null) _laserGlow.Opacity = alpha * 0.18;
+                if (_laserDot != null) _laserDot.Opacity = alpha;
+                anyActive = true;
+            }
+        }
+
+        // Fade completed strokes
+        for (int i = _completedLaserStrokes.Count - 1; i >= 0; i--)
+        {
+            var (line, glow, completedAt) = _completedLaserStrokes[i];
+            var elapsed = now - completedAt;
+            if (elapsed >= LaserStrokeFadeDuration)
+            {
+                OverlayCanvas.Children.Remove(line);
+                OverlayCanvas.Children.Remove(glow);
+                _completedLaserStrokes.RemoveAt(i);
+            }
+            else
+            {
+                var alpha = 1.0 - (elapsed / LaserStrokeFadeDuration);
+                ((SolidColorBrush)line.Stroke!).Opacity = alpha * 0.95;
+                ((SolidColorBrush)glow.Stroke!).Opacity = alpha * 0.2;
+                anyActive = true;
+            }
+        }
+
+        // Active stroke is always visible, keep timer running
+        if (_activeLaserStrokePoints != null)
+            anyActive = true;
+
+        if (!anyActive)
+        {
+            _laserTimer?.Stop();
+            _laserTimer = null;
+        }
+    }
+
+    private void RemoveLaserCursor()
+    {
+        if (_laserGlow != null)
+        {
+            OverlayCanvas.Children.Remove(_laserGlow);
+            _laserGlow = null;
+        }
+        if (_laserDot != null)
+        {
+            OverlayCanvas.Children.Remove(_laserDot);
+            _laserDot = null;
+        }
+        _laserCursorPoint = null;
+    }
+
+    /// <summary>Clears all laser pointer visuals (called when mode is toggled off).</summary>
+    public void ClearLaser()
+    {
+        RemoveLaserCursor();
+        if (_activeLaserStrokeLine != null) OverlayCanvas.Children.Remove(_activeLaserStrokeLine);
+        if (_activeLaserStrokeGlow != null) OverlayCanvas.Children.Remove(_activeLaserStrokeGlow);
+        _activeLaserStrokeLine = null;
+        _activeLaserStrokeGlow = null;
+        _activeLaserStrokePoints = null;
+        foreach (var (line, glow, _) in _completedLaserStrokes)
+        {
+            OverlayCanvas.Children.Remove(line);
+            OverlayCanvas.Children.Remove(glow);
+        }
+        _completedLaserStrokes.Clear();
+        _laserTimer?.Stop();
+        _laserTimer = null;
+    }
+
+    private static double GetTime() => Stopwatch.GetTimestamp() / (double)Stopwatch.Frequency;
 
     private void AnimateRingPulse(double x, double y, double size, double duration, double intensity, Color color, bool showDot = false, bool showCrosshair = false)
     {
@@ -395,6 +640,7 @@ public partial class OverlayWindow : Window
             ClickKind.LeftUp => Color.FromRgb(102, 224, 255),
             ClickKind.RightDown or ClickKind.RightUp => Color.FromRgb(255, 117, 48),
             ClickKind.Drag => Color.FromRgb(235, 214, 56),
+            ClickKind.Move => Colors.Transparent,
             _ => Color.FromRgb(0, 189, 255)
         };
     }
@@ -402,6 +648,7 @@ public partial class OverlayWindow : Window
     private static double GetSize(ClickKind kind, ClickSettings settings) => kind switch
     {
         ClickKind.Drag => settings.Size * 0.6,
+        ClickKind.Move => 0,
         ClickKind.LeftUp or ClickKind.RightUp => settings.Size * 0.82,
         _ => settings.Size
     };
@@ -409,6 +656,7 @@ public partial class OverlayWindow : Window
     private static double GetDuration(ClickKind kind, ClickSettings settings) => kind switch
     {
         ClickKind.Drag => Math.Min(0.38, settings.Duration * 0.82),
+        ClickKind.Move => 0,
         ClickKind.LeftUp or ClickKind.RightUp => settings.Duration * 0.78,
         _ => settings.Duration
     };
