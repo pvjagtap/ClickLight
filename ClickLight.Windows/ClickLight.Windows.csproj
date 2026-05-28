@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <RootNamespace>ClickLight.Windows</RootNamespace>
+    <AssemblyName>ClickLight</AssemblyName>
+    <ApplicationIcon Condition="Exists('Assets\clicklight.ico')">Assets\clicklight.ico</ApplicationIcon>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Version>1.0.0</Version>
+    <Description>Click highlight overlay for live demos and screen sharing on Windows</Description>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\clicklight.ico" Condition="Exists('Assets\clicklight.ico')" />
+  </ItemGroup>
+
+</Project>

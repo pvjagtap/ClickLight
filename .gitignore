@@ -6,3 +6,11 @@ ClickLight.zip
 DerivedData/
 .vscode/
 dist/
+copilot_all_tools.jsonl
+.history
+
+# Windows build artifacts
+ClickLight.Windows/bin/
+ClickLight.Windows/obj/
+ClickLight.Windows/publish/
+.rag-index
