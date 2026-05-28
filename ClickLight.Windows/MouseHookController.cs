@@ -31,6 +31,32 @@ public sealed class MouseHookController : IDisposable
     [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
     private static extern IntPtr GetModuleHandle(string lpModuleName);
 
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetCursorInfo(ref CURSORINFO pci);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr LoadCursor(IntPtr hInstance, int lpCursorName);
+
+    private const int IDC_ARROW = 32512;
+    private const int IDC_IBEAM = 32513;
+    private const int IDC_HAND = 32649;
+    private const int IDC_SIZEALL = 32646;
+    private const int IDC_SIZENS = 32645;
+    private const int IDC_SIZEWE = 32644;
+    private const int IDC_SIZENESW = 32643;
+    private const int IDC_SIZENWSE = 32642;
+    private const int CURSOR_SHOWING = 0x00000001;
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct CURSORINFO
+    {
+        public int cbSize;
+        public int flags;
+        public IntPtr hCursor;
+        public POINT ptScreenPos;
+    }
+
     [StructLayout(LayoutKind.Sequential)]
     private struct MSLLHOOKSTRUCT
     {
@@ -53,10 +79,14 @@ public sealed class MouseHookController : IDisposable
     private IntPtr _hookId = IntPtr.Zero;
     private LowLevelMouseProc? _proc;
     private bool _leftButtonDown;
+    private bool _isFileDrag;
+    private int _dragMoveCount;
     private POINT _dragStartPoint;
     private POINT _lastDragEmitPoint;
     private DateTime _lastDragTime = DateTime.MinValue;
     private static readonly TimeSpan DragThrottle = TimeSpan.FromMilliseconds(16);
+    private static readonly HashSet<IntPtr> _standardCursors = new();
+    private static bool _standardCursorsLoaded;
 
     public bool IsRunning => _hookId != IntPtr.Zero;
     public string StatusLabel => IsRunning ? "Active" : "Stopped";
@@ -110,6 +140,8 @@ public sealed class MouseHookController : IDisposable
             {
                 case WM_LBUTTONDOWN:
                     _leftButtonDown = true;
+                    _isFileDrag = false;
+                    _dragMoveCount = 0;
                     _dragStartPoint = hookStruct.pt;
                     _lastDragEmitPoint = hookStruct.pt;
                     FireEvent(ClickKind.LeftDown, x, y, now);
@@ -137,7 +169,18 @@ public sealed class MouseHookController : IDisposable
                         {
                             _lastDragEmitPoint = hookStruct.pt;
                             _lastDragTime = DateTime.UtcNow;
-                            FireDragEvent(x, y, now);
+                            _dragMoveCount++;
+
+                            // After a few drag moves, check if cursor changed (file/object drag)
+                            if (!_isFileDrag && _dragMoveCount >= 3)
+                            {
+                                _isFileDrag = IsNonStandardCursor();
+                            }
+
+                            if (_isFileDrag)
+                                FireEvent(ClickKind.FileDrag, x, y, now);
+                            else
+                                FireDragEvent(x, y, now);
                         }
                     }
                     else if (_settingsStore.Settings.ShowLaserPointer)
@@ -171,6 +214,36 @@ public sealed class MouseHookController : IDisposable
     private static double GetTimestamp()
     {
         return Stopwatch.GetTimestamp() / (double)Stopwatch.Frequency;
+    }
+
+    /// <summary>
+    /// Checks if the current cursor is NOT a standard system cursor.
+    /// During file/object drag-drop, Windows changes the cursor to a custom drag icon.
+    /// </summary>
+    private static bool IsNonStandardCursor()
+    {
+        EnsureStandardCursorsLoaded();
+
+        var ci = new CURSORINFO { cbSize = Marshal.SizeOf<CURSORINFO>() };
+        if (!GetCursorInfo(ref ci)) return false;
+        if ((ci.flags & CURSOR_SHOWING) == 0) return false;
+        if (ci.hCursor == IntPtr.Zero) return false;
+
+        return !_standardCursors.Contains(ci.hCursor);
+    }
+
+    private static void EnsureStandardCursorsLoaded()
+    {
+        if (_standardCursorsLoaded) return;
+        _standardCursorsLoaded = true;
+
+        int[] standardIds = { IDC_ARROW, IDC_IBEAM, IDC_HAND, IDC_SIZEALL, IDC_SIZENS, IDC_SIZEWE, IDC_SIZENESW, IDC_SIZENWSE };
+        foreach (var id in standardIds)
+        {
+            var cursor = LoadCursor(IntPtr.Zero, id);
+            if (cursor != IntPtr.Zero)
+                _standardCursors.Add(cursor);
+        }
     }
 
     public void Dispose()

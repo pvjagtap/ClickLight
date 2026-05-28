@@ -31,6 +31,11 @@ public partial class OverlayWindow : Window
     private const double LaserStrokeFadeDuration = 0.9;
     private static readonly Color LaserColor = Color.FromRgb(255, 41, 61);
 
+    // File drag trail constants
+    private const double TrailDotFadeDuration = 0.6;
+    private const double TrailDotSize = 10;
+    private static readonly Color TrailColor = Color.FromRgb(0, 189, 255);
+
     [DllImport("user32.dll", EntryPoint = "GetWindowLongPtr")]
     private static extern IntPtr GetWindowLongPtr64(IntPtr hwnd, int index);
 
@@ -103,6 +108,10 @@ public partial class OverlayWindow : Window
     private readonly List<(System.Windows.Shapes.Polyline Line, System.Windows.Shapes.Polyline Glow, double CompletedAt)> _completedLaserStrokes = new();
     private System.Windows.Threading.DispatcherTimer? _laserTimer;
 
+    // File drag trail state
+    private readonly List<(Ellipse Dot, double CenterX, double CenterY, double CreatedAt)> _trailDots = new();
+    private System.Windows.Threading.DispatcherTimer? _trailTimer;
+
     public void ShowPulse(ClickEvent clickEvent, ClickSettings settings)
     {
         // Guard against excessive element accumulation (auto-clicker / rapid fire)
@@ -146,6 +155,14 @@ public partial class OverlayWindow : Window
             }
         }
 
+        // File drag → show disappearing dot trail instead of rectangle
+        if (clickEvent.Kind == ClickKind.FileDrag)
+        {
+            RemoveDragRect();
+            ShowTrailDot(localX, localY, settings);
+            return;
+        }
+
         // Skip pulse rendering for event types that shouldn't show
         if (!ShouldShowPulse(clickEvent.Kind, settings)) return;
 
@@ -182,7 +199,7 @@ public partial class OverlayWindow : Window
         ClickKind.LeftUp => settings.ShowRelease,
         ClickKind.RightDown or ClickKind.RightUp => settings.ShowRightClick,
         ClickKind.Drag => settings.ShowDrag && !settings.ShowLaserPointer,
-        ClickKind.Move => false,
+        ClickKind.Move or ClickKind.FileDrag => false,
         _ => true
     };
 
@@ -455,6 +472,73 @@ public partial class OverlayWindow : Window
         _laserTimer = null;
     }
 
+    // ─── File Drag Trail Methods ──────────────────────────────────────────
+
+    private void ShowTrailDot(double x, double y, ClickSettings settings)
+    {
+        var color = GetColor(ClickKind.FileDrag, settings);
+        var intensity = Math.Max(0.15, Math.Min(1.35, settings.Intensity));
+
+        var dot = new Ellipse
+        {
+            Width = TrailDotSize,
+            Height = TrailDotSize,
+            Fill = new SolidColorBrush(color) { Opacity = intensity * 0.7 },
+            IsHitTestVisible = false
+        };
+        System.Windows.Controls.Canvas.SetLeft(dot, x - TrailDotSize / 2);
+        System.Windows.Controls.Canvas.SetTop(dot, y - TrailDotSize / 2);
+        OverlayCanvas.Children.Add(dot);
+
+        _trailDots.Add((dot, x, y, GetTime()));
+        StartTrailTimer();
+    }
+
+    private void StartTrailTimer()
+    {
+        if (_trailTimer != null) return;
+        _trailTimer = new System.Windows.Threading.DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(16)
+        };
+        _trailTimer.Tick += TrailTimerTick;
+        _trailTimer.Start();
+    }
+
+    private void TrailTimerTick(object? sender, EventArgs e)
+    {
+        var now = GetTime();
+
+        for (int i = _trailDots.Count - 1; i >= 0; i--)
+        {
+            var (dot, cx, cy, createdAt) = _trailDots[i];
+            var elapsed = now - createdAt;
+            if (elapsed >= TrailDotFadeDuration)
+            {
+                OverlayCanvas.Children.Remove(dot);
+                _trailDots.RemoveAt(i);
+            }
+            else
+            {
+                var alpha = 1.0 - (elapsed / TrailDotFadeDuration);
+                dot.Opacity = alpha * 0.7;
+                // Shrink toward center as it fades
+                var scale = 0.5 + 0.5 * alpha;
+                var size = TrailDotSize * scale;
+                dot.Width = size;
+                dot.Height = size;
+                System.Windows.Controls.Canvas.SetLeft(dot, cx - size / 2);
+                System.Windows.Controls.Canvas.SetTop(dot, cy - size / 2);
+            }
+        }
+
+        if (_trailDots.Count == 0)
+        {
+            _trailTimer?.Stop();
+            _trailTimer = null;
+        }
+    }
+
     private static double GetTime() => Stopwatch.GetTimestamp() / (double)Stopwatch.Frequency;
 
     private void AnimateRingPulse(double x, double y, double size, double duration, double intensity, Color color, bool showDot = false, bool showCrosshair = false)
@@ -640,6 +724,7 @@ public partial class OverlayWindow : Window
             ClickKind.LeftUp => Color.FromRgb(102, 224, 255),
             ClickKind.RightDown or ClickKind.RightUp => Color.FromRgb(255, 117, 48),
             ClickKind.Drag => Color.FromRgb(235, 214, 56),
+            ClickKind.FileDrag => TrailColor,
             ClickKind.Move => Colors.Transparent,
             _ => Color.FromRgb(0, 189, 255)
         };
@@ -648,7 +733,7 @@ public partial class OverlayWindow : Window
     private static double GetSize(ClickKind kind, ClickSettings settings) => kind switch
     {
         ClickKind.Drag => settings.Size * 0.6,
-        ClickKind.Move => 0,
+        ClickKind.Move or ClickKind.FileDrag => 0,
         ClickKind.LeftUp or ClickKind.RightUp => settings.Size * 0.82,
         _ => settings.Size
     };
@@ -656,7 +741,7 @@ public partial class OverlayWindow : Window
     private static double GetDuration(ClickKind kind, ClickSettings settings) => kind switch
     {
         ClickKind.Drag => Math.Min(0.38, settings.Duration * 0.82),
-        ClickKind.Move => 0,
+        ClickKind.Move or ClickKind.FileDrag => 0,
         ClickKind.LeftUp or ClickKind.RightUp => settings.Duration * 0.78,
         _ => settings.Duration
     };

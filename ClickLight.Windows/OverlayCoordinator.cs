@@ -40,8 +40,8 @@ public sealed class OverlayCoordinator
         var settings = _settingsStore.Settings;
         if (!settings.IsEnabled) return;
         if (!ShouldShow(clickEvent.Kind, settings)) return;
-        // Skip duplicate detection for Drag and Move — continuously updated
-        if (clickEvent.Kind != ClickKind.Drag && clickEvent.Kind != ClickKind.Move && !ShouldAccept(clickEvent)) return;
+        // Skip duplicate detection for Drag, Move, FileDrag — continuously updated
+        if (clickEvent.Kind != ClickKind.Drag && clickEvent.Kind != ClickKind.Move && clickEvent.Kind != ClickKind.FileDrag && !ShouldAccept(clickEvent)) return;
 
         var screenKey = GetScreenKey(clickEvent.X, clickEvent.Y);
         if (screenKey != null && _overlays.TryGetValue(screenKey, out var overlay))
@@ -98,6 +98,7 @@ public sealed class OverlayCoordinator
         ClickKind.LeftUp => settings.ShowRelease,
         ClickKind.RightDown or ClickKind.RightUp => settings.ShowRightClick,
         ClickKind.Drag => settings.ShowDrag || settings.ShowLaserPointer,
+        ClickKind.FileDrag => settings.ShowDrag,
         ClickKind.Move => settings.ShowLaserPointer,
         _ => false
     };
