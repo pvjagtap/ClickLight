@@ -179,7 +179,7 @@ public partial class SettingsWindow : Window
                 s.CustomColor = System.Windows.Media.Color.FromRgb(picked.R, picked.G, picked.B);
             });
             _suppressEvents = true;
-            ColorCombo.SelectedIndex = -1;
+            SelectComboByTag(ColorCombo, ColorPreset.Custom);
             _suppressEvents = false;
             UpdateCustomColorVisibility(_settingsStore.Settings);
         }
@@ -213,6 +213,18 @@ public partial class SettingsWindow : Window
         RightColorButton.Background = new System.Windows.Media.SolidColorBrush(s.CustomRightColor);
         MiddleColorButton.Background = new System.Windows.Media.SolidColorBrush(s.CustomMiddleColor);
         DragColorButton.Background = new System.Windows.Media.SolidColorBrush(s.CustomDragColor);
+    }
+
+    private static void SelectComboByTag(System.Windows.Controls.ComboBox combo, object tag)
+    {
+        for (int i = 0; i < combo.Items.Count; i++)
+        {
+            if (combo.Items[i] is ComboBoxItem item && Equals(item.Tag, tag))
+            {
+                combo.SelectedIndex = i;
+                return;
+            }
+        }
     }
 
     private void SaveIfReady(Action<ClickSettings> mutate)

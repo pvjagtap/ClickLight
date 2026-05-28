@@ -1,3 +1,5 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Windows.Media;
 
 namespace ClickLight.Windows;
@@ -19,13 +21,74 @@ public class ClickSettings
     public double Duration { get; set; } = 0.48;
     public ColorPreset ColorPreset { get; set; } = ColorPreset.Default;
     public CustomColorMode CustomColorMode { get; set; } = CustomColorMode.All;
+
+    [JsonConverter(typeof(HexColorConverter))]
     public Color CustomColor { get; set; } = Color.FromRgb(0, 189, 255);
+
+    [JsonConverter(typeof(HexColorConverter))]
     public Color CustomLeftColor { get; set; } = Color.FromRgb(0, 189, 255);
+
+    [JsonConverter(typeof(HexColorConverter))]
     public Color CustomRightColor { get; set; } = Color.FromRgb(255, 117, 48);
+
+    [JsonConverter(typeof(HexColorConverter))]
     public Color CustomMiddleColor { get; set; } = Color.FromRgb(69, 235, 148);
+
+    [JsonConverter(typeof(HexColorConverter))]
     public Color CustomDragColor { get; set; } = Color.FromRgb(235, 214, 56);
 
     public ClickSettings Clone() => (ClickSettings)MemberwiseClone();
+}
+
+/// <summary>
+/// Serializes System.Windows.Media.Color as "#RRGGBB" hex string.
+/// Also handles the old bloated object format for backward compatibility.
+/// </summary>
+public class HexColorConverter : JsonConverter<Color>
+{
+    public override Color Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        if (reader.TokenType == JsonTokenType.String)
+        {
+            var hex = reader.GetString()!.TrimStart('#');
+            if (hex.Length == 6)
+            {
+                var r = Convert.ToByte(hex[..2], 16);
+                var g = Convert.ToByte(hex[2..4], 16);
+                var b = Convert.ToByte(hex[4..6], 16);
+                return Color.FromRgb(r, g, b);
+            }
+        }
+        else if (reader.TokenType == JsonTokenType.StartObject)
+        {
+            // Handle old format: { "A": 255, "R": 0, "G": 189, "B": 255, "ScR": ..., ... }
+            byte r = 0, g = 0, b = 0;
+            while (reader.Read() && reader.TokenType != JsonTokenType.EndObject)
+            {
+                if (reader.TokenType == JsonTokenType.PropertyName)
+                {
+                    var prop = reader.GetString();
+                    reader.Read();
+                    if (reader.TokenType == JsonTokenType.Number && reader.TryGetByte(out var val))
+                    {
+                        switch (prop)
+                        {
+                            case "R": r = val; break;
+                            case "G": g = val; break;
+                            case "B": b = val; break;
+                        }
+                    }
+                }
+            }
+            return Color.FromRgb(r, g, b);
+        }
+        return Color.FromRgb(0, 189, 255); // fallback
+    }
+
+    public override void Write(Utf8JsonWriter writer, Color value, JsonSerializerOptions options)
+    {
+        writer.WriteStringValue($"#{value.R:X2}{value.G:X2}{value.B:X2}");
+    }
 }
 
 /// <summary>
