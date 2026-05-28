@@ -106,6 +106,7 @@ final class ClickLightSettingsViewModel: NSObject, ObservableObject {
     }
 
     func refreshSystemState() {
+        launchAtLogin.refresh()
         launchAtLoginEnabled = launchAtLogin.isEnabled
         accessibilityTrusted = permissions.isAccessibilityTrusted
     }

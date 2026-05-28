@@ -50,6 +50,10 @@ final class StatusController {
         )
     }
 
+    func refresh() {
+        rebuildMenu()
+    }
+
     @objc private func settingsDidChange() {
         applyStatusItemAppearance(settingsStore.settings)
         pendingMenuRebuild?.cancel()

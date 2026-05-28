@@ -44,10 +44,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             name: ClickEventTap.didReceiveClickEvent,
             object: nil
         )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appDidBecomeActive),
+            name: NSApplication.didBecomeActiveNotification,
+            object: nil
+        )
     }
 
     func applicationWillTerminate(_ notification: Notification) {
         captureController.stop()
+    }
+
+    @objc private func appDidBecomeActive() {
+        launchAtLogin.refresh()
+        statusController.refresh()
     }
 
     @objc private func settingsDidChange() {

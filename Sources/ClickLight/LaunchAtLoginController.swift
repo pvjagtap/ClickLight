@@ -5,6 +5,7 @@ import ServiceManagement
 protocol LaunchAtLoginManaging {
     var isEnabled: Bool { get }
     func setEnabled(_ enabled: Bool) throws
+    func refresh()
 }
 
 enum LaunchAtLoginState {
@@ -27,6 +28,10 @@ final class LaunchAtLoginController: LaunchAtLoginManaging {
         } else {
             try SMAppService.mainApp.unregister()
         }
-        cachedIsEnabled = enabled
+        refresh()
+    }
+
+    func refresh() {
+        cachedIsEnabled = SMAppService.mainApp.status == .enabled
     }
 }
