@@ -15,8 +15,10 @@ enum LaunchAtLoginState {
 
 @MainActor
 final class LaunchAtLoginController: LaunchAtLoginManaging {
+    private var cachedIsEnabled = SMAppService.mainApp.status == .enabled
+
     var isEnabled: Bool {
-        SMAppService.mainApp.status == .enabled
+        cachedIsEnabled
     }
 
     func setEnabled(_ enabled: Bool) throws {
@@ -25,5 +27,6 @@ final class LaunchAtLoginController: LaunchAtLoginManaging {
         } else {
             try SMAppService.mainApp.unregister()
         }
+        cachedIsEnabled = enabled
     }
 }
