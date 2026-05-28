@@ -18,6 +18,7 @@ jobs:
     runs-on: macos-26
     environment: release
     permissions:
+      actions: write # Required to dispatch checks for the generated metadata pull request.
       contents: write # Required to create the GitHub Release and push its metadata branch.
       pull-requests: write # Required to open the release metadata pull request.
 
@@ -143,3 +144,5 @@ jobs:
             --head "$BRANCH" \
             --title "Update release metadata for v${VERSION}" \
             --body "Updates the Homebrew cask and Sparkle appcast for the published v${VERSION} release. Merge this PR to make the release available through Homebrew upgrades and in-app updates."
+          gh workflow run security.yml --ref "$BRANCH"
+          gh workflow run pr-smoke.yml --ref "$BRANCH"
