@@ -109,7 +109,6 @@ public sealed class TrayIconController : IDisposable
         var colorMenu = new ToolStripMenuItem("Color");
         foreach (ColorPreset preset in Enum.GetValues<ColorPreset>())
         {
-            if (preset == ColorPreset.Custom) continue;
             var item = new ToolStripMenuItem(preset.DisplayName());
             item.Checked = settings.ColorPreset == preset;
             var p = preset;

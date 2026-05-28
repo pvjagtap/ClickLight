@@ -47,7 +47,6 @@ public partial class SettingsWindow : Window
         ColorCombo.Items.Clear();
         foreach (ColorPreset preset in Enum.GetValues<ColorPreset>())
         {
-            if (preset == ColorPreset.Custom) continue;
             ColorCombo.Items.Add(new ComboBoxItem { Content = preset.DisplayName(), Tag = preset });
         }
         for (int i = 0; i < ColorCombo.Items.Count; i++)
