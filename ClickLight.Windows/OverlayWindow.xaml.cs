@@ -19,10 +19,6 @@ public partial class OverlayWindow : Window
     private const int WS_EX_TRANSPARENT = 0x00000020;
     private const int WS_EX_TOOLWINDOW = 0x00000080;
 
-    private const uint SWP_NOZORDER = 0x0004;
-    private const uint SWP_NOACTIVATE = 0x0010;
-    private const uint SWP_SHOWWINDOW = 0x0040;
-
     // Max simultaneous canvas children to prevent memory runaway from rapid clicking.
     // Must be large enough for: stroke segments (300) + trail dots (120) + active pulses.
     private const int MaxCanvasChildren = 600;
@@ -43,23 +39,15 @@ public partial class OverlayWindow : Window
     [DllImport("user32.dll", EntryPoint = "SetWindowLong")]
     private static extern int SetWindowLong32(IntPtr hwnd, int index, int newStyle);
 
-    [DllImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool SetWindowPos(IntPtr hwnd, IntPtr hwndInsertAfter, int x, int y, int cx, int cy, uint flags);
-
-    private readonly Rect _physicalBounds;
-
-    public OverlayWindow(Rect physicalScreenBounds)
+    public OverlayWindow(Rect screenBounds)
     {
         InitializeComponent();
-        _physicalBounds = physicalScreenBounds;
 
-        // Set approximate initial position (will be corrected in OnLoaded via SetWindowPos)
         WindowStartupLocation = WindowStartupLocation.Manual;
-        Left = physicalScreenBounds.Left;
-        Top = physicalScreenBounds.Top;
-        Width = physicalScreenBounds.Width;
-        Height = physicalScreenBounds.Height;
+        Left = screenBounds.Left;
+        Top = screenBounds.Top;
+        Width = screenBounds.Width;
+        Height = screenBounds.Height;
 
         Loaded += OnLoaded;
     }
@@ -68,7 +56,6 @@ public partial class OverlayWindow : Window
     {
         var hwnd = new WindowInteropHelper(this).Handle;
 
-        // Set extended styles: click-through + tool window (no taskbar entry)
         if (IntPtr.Size == 8)
         {
             var extStyle = GetWindowLongPtr64(hwnd, GWL_EXSTYLE);
@@ -79,14 +66,6 @@ public partial class OverlayWindow : Window
             var extStyle = GetWindowLong32(hwnd, GWL_EXSTYLE);
             SetWindowLong32(hwnd, GWL_EXSTYLE, extStyle | WS_EX_TRANSPARENT | WS_EX_TOOLWINDOW);
         }
-
-        // Position the HWND using physical pixels. Mouse coordinates are converted later
-        // with PointFromScreen so WPF owns the DPI transform for this window.
-        SetWindowPos(
-            hwnd, IntPtr.Zero,
-            (int)_physicalBounds.Left, (int)_physicalBounds.Top,
-            (int)_physicalBounds.Width, (int)_physicalBounds.Height,
-            SWP_NOZORDER | SWP_NOACTIVATE | SWP_SHOWWINDOW);
     }
 
     // The active drag rectangle element — removed/replaced each drag event
@@ -114,13 +93,12 @@ public partial class OverlayWindow : Window
 
     public void ShowPulse(ClickEvent clickEvent, ClickSettings settings)
     {
-        // Guard against excessive element accumulation (auto-clicker / rapid fire)
         if (OverlayCanvas.Children.Count > MaxCanvasChildren)
             return;
 
-        var localPoint = ToCanvasPoint(clickEvent.X, clickEvent.Y);
-        double localX = localPoint.X;
-        double localY = localPoint.Y;
+        var local = PointFromScreen(new System.Windows.Point(clickEvent.X, clickEvent.Y));
+        var localX = local.X;
+        var localY = local.Y;
 
         // Laser pointer mode handling
         if (settings.ShowLaserPointer)
@@ -196,22 +174,17 @@ public partial class OverlayWindow : Window
         _ => true
     };
 
-    private System.Windows.Point ToCanvasPoint(double screenX, double screenY)
-    {
-        return PointFromScreen(new System.Windows.Point(screenX, screenY));
-    }
-
     /// <summary>
     /// Draws/updates a live rectangle from drag start to current cursor position.
     /// </summary>
     private void UpdateDragRect(ClickEvent evt, ClickSettings settings, Color color, double intensity)
     {
-        var startPoint = ToCanvasPoint(evt.DragStartX, evt.DragStartY);
-        var endPoint = ToCanvasPoint(evt.X, evt.Y);
-        double startX = startPoint.X;
-        double startY = startPoint.Y;
-        double endX = endPoint.X;
-        double endY = endPoint.Y;
+        var sp = PointFromScreen(new System.Windows.Point(evt.DragStartX, evt.DragStartY));
+        var ep = PointFromScreen(new System.Windows.Point(evt.X, evt.Y));
+        var startX = sp.X;
+        var startY = sp.Y;
+        var endX = ep.X;
+        var endY = ep.Y;
 
         var left = Math.Min(startX, endX);
         var top = Math.Min(startY, endY);
