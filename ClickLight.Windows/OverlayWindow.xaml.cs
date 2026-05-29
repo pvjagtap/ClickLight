@@ -47,11 +47,7 @@ public partial class OverlayWindow : Window
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool SetWindowPos(IntPtr hwnd, IntPtr hwndInsertAfter, int x, int y, int cx, int cy, uint flags);
 
-    [DllImport("user32.dll")]
-    private static extern uint GetDpiForWindow(IntPtr hwnd);
-
     private readonly Rect _physicalBounds;
-    private double _dpiScale = 1.0;
 
     public OverlayWindow(Rect physicalScreenBounds)
     {
@@ -84,30 +80,13 @@ public partial class OverlayWindow : Window
             SetWindowLong32(hwnd, GWL_EXSTYLE, extStyle | WS_EX_TRANSPARENT | WS_EX_TOOLWINDOW);
         }
 
-        // IMPORTANT: Position the window on its target monitor FIRST.
-        // GetDpiForWindow returns the DPI of whichever monitor the window is currently on.
-        // If we read DPI before moving, the window may still be on the primary monitor
-        // (WPF placed it using logical coords), giving the wrong DPI for a non-primary monitor.
+        // Position the HWND using physical pixels. Mouse coordinates are converted later
+        // with PointFromScreen so WPF owns the DPI transform for this window.
         SetWindowPos(
             hwnd, IntPtr.Zero,
             (int)_physicalBounds.Left, (int)_physicalBounds.Top,
             (int)_physicalBounds.Width, (int)_physicalBounds.Height,
             SWP_NOZORDER | SWP_NOACTIVATE | SWP_SHOWWINDOW);
-
-        // NOW read DPI — window is on its correct monitor.
-        // With PerMonitorV2, WPF canvas uses DIPs. Mouse hook gives physical pixels.
-        // Coordinate conversion: localDIP = (physicalAbs - screenOriginPhysical) / dpiScale
-        var dpi = GetDpiForWindow(hwnd);
-        if (dpi > 0)
-        {
-            _dpiScale = dpi / 96.0;
-        }
-        else
-        {
-            var source = PresentationSource.FromVisual(this);
-            if (source?.CompositionTarget != null)
-                _dpiScale = source.CompositionTarget.TransformToDevice.M11;
-        }
     }
 
     // The active drag rectangle element — removed/replaced each drag event
@@ -139,11 +118,9 @@ public partial class OverlayWindow : Window
         if (OverlayCanvas.Children.Count > MaxCanvasChildren)
             return;
 
-        // Convert physical screen coordinates to WPF canvas coordinates (DIPs).
-        // Mouse hook gives physical pixels. Canvas is in DIPs (1 DIP = dpiScale physical px).
-        // Subtract screen origin (physical), then convert to DIPs.
-        double localX = (clickEvent.X - _physicalBounds.Left) / _dpiScale;
-        double localY = (clickEvent.Y - _physicalBounds.Top) / _dpiScale;
+        var localPoint = ToCanvasPoint(clickEvent.X, clickEvent.Y);
+        double localX = localPoint.X;
+        double localY = localPoint.Y;
 
         // Laser pointer mode handling
         if (settings.ShowLaserPointer)
@@ -219,15 +196,22 @@ public partial class OverlayWindow : Window
         _ => true
     };
 
+    private System.Windows.Point ToCanvasPoint(double screenX, double screenY)
+    {
+        return PointFromScreen(new System.Windows.Point(screenX, screenY));
+    }
+
     /// <summary>
     /// Draws/updates a live rectangle from drag start to current cursor position.
     /// </summary>
     private void UpdateDragRect(ClickEvent evt, ClickSettings settings, Color color, double intensity)
     {
-        double startX = (evt.DragStartX - _physicalBounds.Left) / _dpiScale;
-        double startY = (evt.DragStartY - _physicalBounds.Top) / _dpiScale;
-        double endX = (evt.X - _physicalBounds.Left) / _dpiScale;
-        double endY = (evt.Y - _physicalBounds.Top) / _dpiScale;
+        var startPoint = ToCanvasPoint(evt.DragStartX, evt.DragStartY);
+        var endPoint = ToCanvasPoint(evt.X, evt.Y);
+        double startX = startPoint.X;
+        double startY = startPoint.Y;
+        double endX = endPoint.X;
+        double endY = endPoint.Y;
 
         var left = Math.Min(startX, endX);
         var top = Math.Min(startY, endY);
