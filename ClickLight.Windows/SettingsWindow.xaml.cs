@@ -28,6 +28,13 @@ public partial class SettingsWindow : Window
         EnabledCheck.IsChecked = s.IsEnabled;
         LaunchAtLoginCheck.IsChecked = LaunchAtLoginController.IsEnabled;
         ShowLaserPointerCheck.IsChecked = s.ShowLaserPointer;
+        HideSystemCursorCheck.IsChecked = s.HideSystemCursor;
+        ShootingStarTrailCheck.IsChecked = s.ShootingStarTrail;
+        LaserSizeSlider.Value = s.LaserPointerSize;
+        LaserSizeLabel.Text = $"{s.LaserPointerSize:F0}";
+        HideSystemCursorCheck.IsEnabled = s.ShowLaserPointer;
+        ShootingStarTrailCheck.IsEnabled = s.ShowLaserPointer;
+        LaserSizeSlider.IsEnabled = s.ShowLaserPointer;
         ShowPressCheck.IsChecked = s.ShowPress;
         ShowReleaseCheck.IsChecked = s.ShowRelease;
         ShowRightClickCheck.IsChecked = s.ShowRightClick;
@@ -100,11 +107,29 @@ public partial class SettingsWindow : Window
         {
             SaveIfReady(s => s.ShowLaserPointer = true);
             ShowDragCheck.IsEnabled = false;
+            HideSystemCursorCheck.IsEnabled = true;
+            ShootingStarTrailCheck.IsEnabled = true;
+            LaserSizeSlider.IsEnabled = true;
         };
         ShowLaserPointerCheck.Unchecked += (_, _) =>
         {
             SaveIfReady(s => s.ShowLaserPointer = false);
             ShowDragCheck.IsEnabled = true;
+            HideSystemCursorCheck.IsEnabled = false;
+            ShootingStarTrailCheck.IsEnabled = false;
+            LaserSizeSlider.IsEnabled = false;
+        };
+
+        HideSystemCursorCheck.Checked += (_, _) => SaveIfReady(s => s.HideSystemCursor = true);
+        HideSystemCursorCheck.Unchecked += (_, _) => SaveIfReady(s => s.HideSystemCursor = false);
+
+        ShootingStarTrailCheck.Checked += (_, _) => SaveIfReady(s => s.ShootingStarTrail = true);
+        ShootingStarTrailCheck.Unchecked += (_, _) => SaveIfReady(s => s.ShootingStarTrail = false);
+
+        LaserSizeSlider.ValueChanged += (_, e) =>
+        {
+            LaserSizeLabel.Text = $"{e.NewValue:F0}";
+            SaveIfReady(s => s.LaserPointerSize = e.NewValue);
         };
 
         SizeSlider.ValueChanged += (_, e) =>

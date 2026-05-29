@@ -28,7 +28,6 @@ public partial class OverlayWindow : Window
 
     // Laser pointer constants
     private const double LaserCursorFadeDuration = 0.42;
-    private const double LaserStrokeFadeDuration = 0.9;
     private static readonly Color LaserColor = Color.FromRgb(255, 41, 61);
 
     [DllImport("user32.dll", EntryPoint = "GetWindowLongPtr")]
@@ -47,7 +46,11 @@ public partial class OverlayWindow : Window
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool SetWindowPos(IntPtr hwnd, IntPtr hwndInsertAfter, int x, int y, int cx, int cy, uint flags);
 
+    [DllImport("user32.dll")]
+    private static extern uint GetDpiForWindow(IntPtr hwnd);
+
     private readonly Rect _physicalBounds;
+    private double _dpiScale = 1.0;
 
     public OverlayWindow(Rect physicalScreenBounds)
     {
@@ -80,6 +83,34 @@ public partial class OverlayWindow : Window
             SetWindowLong32(hwnd, GWL_EXSTYLE, extStyle | WS_EX_TRANSPARENT | WS_EX_TOOLWINDOW);
         }
 
+        // Get the DPI scale so we can counter it on the Canvas.
+        // By applying inverse scale to the canvas, 1 canvas unit = 1 physical pixel.
+        // This eliminates all DPI conversion math when positioning elements.
+        var source = PresentationSource.FromVisual(this);
+        if (source?.CompositionTarget != null)
+        {
+            _dpiScale = source.CompositionTarget.TransformToDevice.M11;
+        }
+        else
+        {
+            try
+            {
+                var dpi = GetDpiForWindow(hwnd);
+                if (dpi > 0)
+                    _dpiScale = dpi / 96.0;
+            }
+            catch { /* stay at 1.0 */ }
+        }
+
+        // Apply inverse DPI transform to canvas so canvas coords = physical pixels
+        if (_dpiScale > 0 && Math.Abs(_dpiScale - 1.0) > 0.01)
+        {
+            OverlayCanvas.LayoutTransform = new ScaleTransform(1.0 / _dpiScale, 1.0 / _dpiScale);
+        }
+
+        System.Diagnostics.Debug.WriteLine(
+            $"[ClickLight] Screen {_physicalBounds} DPI scale: {_dpiScale:F2}");
+
         // Position the window using exact physical pixel coordinates via Win32.
         // This bypasses WPF's DPI-logical coordinate system entirely for positioning.
         SetWindowPos(
@@ -97,11 +128,20 @@ public partial class OverlayWindow : Window
     private double _laserCursorUpdatedAt;
     private Ellipse? _laserGlow;
     private Ellipse? _laserDot;
-    private List<System.Windows.Point>? _activeLaserStrokePoints;
-    private System.Windows.Shapes.Polyline? _activeLaserStrokeLine;
-    private System.Windows.Shapes.Polyline? _activeLaserStrokeGlow;
-    private readonly List<(System.Windows.Shapes.Polyline Line, System.Windows.Shapes.Polyline Glow, double CompletedAt)> _completedLaserStrokes = new();
     private System.Windows.Threading.DispatcherTimer? _laserTimer;
+
+    // Shooting star trail dots (when just moving the laser cursor)
+    private readonly List<(Ellipse Dot, double CenterX, double CenterY, double BaseSize, double CreatedAt, double Lifetime)> _trailDots = new();
+    private const int MaxTrailDots = 120;
+    private const double TrailDotLifetime = 0.55; // trail dots when just moving
+    private double _lastTrailDotTime;
+
+    // Stroke line segments (when dragging) — dissolving connected lines
+    private readonly List<(System.Windows.Shapes.Line Seg, double BaseThickness, double CreatedAt, double Lifetime)> _strokeSegments = new();
+    private const int MaxStrokeSegments = 300;
+    private const double StrokeSegmentLifetime = 1.8; // how long each line segment lives
+    private System.Windows.Point? _lastStrokeDotPos;
+    private ClickSettings? _currentLaserSettings;
 
     public void ShowPulse(ClickEvent clickEvent, ClickSettings settings)
     {
@@ -109,21 +149,11 @@ public partial class OverlayWindow : Window
         if (OverlayCanvas.Children.Count > MaxCanvasChildren)
             return;
 
-        // Convert physical screen coordinates to WPF logical window coordinates.
-        // PointFromScreen properly handles DPI scaling per-monitor.
-        double localX, localY;
-        try
-        {
-            var screenPoint = new System.Windows.Point(clickEvent.X, clickEvent.Y);
-            var local = PointFromScreen(screenPoint);
-            localX = local.X;
-            localY = local.Y;
-        }
-        catch (InvalidOperationException)
-        {
-            // Window not fully connected to presentation source yet — skip this pulse
-            return;
-        }
+        // Convert physical screen coordinates to canvas coordinates.
+        // Canvas has inverse DPI transform applied, so 1 canvas unit = 1 physical pixel.
+        // Just subtract the screen origin.
+        double localX = clickEvent.X - _physicalBounds.Left;
+        double localY = clickEvent.Y - _physicalBounds.Top;
 
         // Laser pointer mode handling
         if (settings.ShowLaserPointer)
@@ -131,11 +161,11 @@ public partial class OverlayWindow : Window
             switch (clickEvent.Kind)
             {
                 case ClickKind.Move:
-                    ShowLaserCursor(localX, localY);
+                    ShowLaserCursor(localX, localY, settings);
                     return;
                 case ClickKind.Drag:
                     RemoveDragRect();
-                    AppendLaserPoint(localX, localY);
+                    AppendLaserPoint(localX, localY, settings);
                     return;
                 case ClickKind.LeftUp:
                 case ClickKind.RightUp:
@@ -204,15 +234,10 @@ public partial class OverlayWindow : Window
     /// </summary>
     private void UpdateDragRect(ClickEvent evt, ClickSettings settings, Color color, double intensity)
     {
-        double startX, startY, endX, endY;
-        try
-        {
-            var s = PointFromScreen(new System.Windows.Point(evt.DragStartX, evt.DragStartY));
-            var e = PointFromScreen(new System.Windows.Point(evt.X, evt.Y));
-            startX = s.X; startY = s.Y;
-            endX = e.X; endY = e.Y;
-        }
-        catch (InvalidOperationException) { return; }
+        double startX = evt.DragStartX - _physicalBounds.Left;
+        double startY = evt.DragStartY - _physicalBounds.Top;
+        double endX = evt.X - _physicalBounds.Left;
+        double endY = evt.Y - _physicalBounds.Top;
 
         var left = Math.Min(startX, endX);
         var top = Math.Min(startY, endY);
@@ -278,95 +303,149 @@ public partial class OverlayWindow : Window
 
     // ─── Laser Pointer Methods ────────────────────────────────────────────
 
-    private void ShowLaserCursor(double x, double y)
+    private void ShowLaserCursor(double x, double y, ClickSettings settings)
     {
         _laserCursorPoint = new System.Windows.Point(x, y);
         _laserCursorUpdatedAt = GetTime();
+        _currentLaserSettings = settings;
+
+        var dotSize = settings.LaserPointerSize;
+        var glowSize = dotSize * 2.3;
 
         if (_laserGlow == null)
         {
             _laserGlow = new Ellipse
             {
-                Width = 28, Height = 28,
+                Width = glowSize, Height = glowSize,
                 Fill = new SolidColorBrush(LaserColor) { Opacity = 0.18 },
                 IsHitTestVisible = false
             };
             OverlayCanvas.Children.Add(_laserGlow);
         }
+        else
+        {
+            _laserGlow.Width = glowSize;
+            _laserGlow.Height = glowSize;
+        }
         if (_laserDot == null)
         {
             _laserDot = new Ellipse
             {
-                Width = 12, Height = 12,
+                Width = dotSize, Height = dotSize,
                 Fill = new SolidColorBrush(LaserColor),
                 IsHitTestVisible = false
             };
             OverlayCanvas.Children.Add(_laserDot);
         }
+        else
+        {
+            _laserDot.Width = dotSize;
+            _laserDot.Height = dotSize;
+        }
 
-        System.Windows.Controls.Canvas.SetLeft(_laserGlow, x - 14);
-        System.Windows.Controls.Canvas.SetTop(_laserGlow, y - 14);
-        System.Windows.Controls.Canvas.SetLeft(_laserDot, x - 6);
-        System.Windows.Controls.Canvas.SetTop(_laserDot, y - 6);
+        System.Windows.Controls.Canvas.SetLeft(_laserGlow, x - glowSize / 2);
+        System.Windows.Controls.Canvas.SetTop(_laserGlow, y - glowSize / 2);
+        System.Windows.Controls.Canvas.SetLeft(_laserDot, x - dotSize / 2);
+        System.Windows.Controls.Canvas.SetTop(_laserDot, y - dotSize / 2);
         _laserGlow.Opacity = 1;
         _laserDot.Opacity = 1;
+
+        // Emit shooting star trail dot
+        if (settings.ShootingStarTrail)
+        {
+            var now = GetTime();
+            if (now - _lastTrailDotTime > 0.018) // ~55fps trail emission
+            {
+                _lastTrailDotTime = now;
+                EmitTrailDot(x, y, dotSize);
+            }
+        }
 
         StartLaserTimer();
     }
 
-    private void AppendLaserPoint(double x, double y)
+    private void EmitTrailDot(double x, double y, double baseSize)
     {
-        ShowLaserCursor(x, y);
+        // Limit trail dots to prevent memory runaway
+        if (_trailDots.Count >= MaxTrailDots)
+        {
+            var (oldDot, _, _, _, _, _) = _trailDots[0];
+            OverlayCanvas.Children.Remove(oldDot);
+            _trailDots.RemoveAt(0);
+        }
+
+        // Create a trail dot slightly smaller than the main dot
+        var trailSize = baseSize * 0.55;
+        var trailDot = new Ellipse
+        {
+            Width = trailSize,
+            Height = trailSize,
+            Fill = new SolidColorBrush(LaserColor) { Opacity = 0.7 },
+            IsHitTestVisible = false
+        };
+
+        System.Windows.Controls.Canvas.SetLeft(trailDot, x - trailSize / 2);
+        System.Windows.Controls.Canvas.SetTop(trailDot, y - trailSize / 2);
+        OverlayCanvas.Children.Add(trailDot);
+        _trailDots.Add((trailDot, x, y, trailSize, GetTime(), TrailDotLifetime));
+    }
+
+    private void AppendLaserPoint(double x, double y, ClickSettings settings)
+    {
+        ShowLaserCursor(x, y, settings);
 
         var point = new System.Windows.Point(x, y);
+        var strokeThickness = settings.LaserPointerSize * 0.7; // line thickness proportional to pointer
 
-        if (_activeLaserStrokePoints == null)
+        if (_lastStrokeDotPos == null)
         {
-            _activeLaserStrokePoints = new List<System.Windows.Point> { point };
-
-            _activeLaserStrokeLine = new System.Windows.Shapes.Polyline
-            {
-                Stroke = new SolidColorBrush(LaserColor) { Opacity = 0.95 },
-                StrokeThickness = 5,
-                StrokeLineJoin = PenLineJoin.Round,
-                StrokeStartLineCap = PenLineCap.Round,
-                StrokeEndLineCap = PenLineCap.Round,
-                IsHitTestVisible = false
-            };
-            _activeLaserStrokeGlow = new System.Windows.Shapes.Polyline
-            {
-                Stroke = new SolidColorBrush(LaserColor) { Opacity = 0.2 },
-                StrokeThickness = 14,
-                StrokeLineJoin = PenLineJoin.Round,
-                StrokeStartLineCap = PenLineCap.Round,
-                StrokeEndLineCap = PenLineCap.Round,
-                IsHitTestVisible = false
-            };
-            OverlayCanvas.Children.Add(_activeLaserStrokeGlow);
-            OverlayCanvas.Children.Add(_activeLaserStrokeLine);
+            _lastStrokeDotPos = point;
         }
         else
         {
-            var last = _activeLaserStrokePoints[^1];
+            var last = _lastStrokeDotPos.Value;
             var dist = Math.Sqrt(Math.Pow(last.X - x, 2) + Math.Pow(last.Y - y, 2));
-            if (dist < 2.5) return;
-            _activeLaserStrokePoints.Add(point);
+            // Only emit a segment if we moved at least 1 pixel (avoids zero-length lines)
+            if (dist >= 1.0)
+            {
+                EmitStrokeSegment(last.X, last.Y, x, y, strokeThickness);
+                _lastStrokeDotPos = point;
+            }
+        }
+    }
+
+    private void EmitStrokeSegment(double x1, double y1, double x2, double y2, double thickness)
+    {
+        // Remove oldest if at limit
+        if (_strokeSegments.Count >= MaxStrokeSegments)
+        {
+            var (oldSeg, _, _, _) = _strokeSegments[0];
+            OverlayCanvas.Children.Remove(oldSeg);
+            _strokeSegments.RemoveAt(0);
         }
 
-        _activeLaserStrokeLine!.Points = new PointCollection(_activeLaserStrokePoints);
-        _activeLaserStrokeGlow!.Points = new PointCollection(_activeLaserStrokePoints);
+        var seg = new System.Windows.Shapes.Line
+        {
+            X1 = x1,
+            Y1 = y1,
+            X2 = x2,
+            Y2 = y2,
+            Stroke = new SolidColorBrush(LaserColor) { Opacity = 0.9 },
+            StrokeThickness = thickness,
+            StrokeStartLineCap = System.Windows.Media.PenLineCap.Round,
+            StrokeEndLineCap = System.Windows.Media.PenLineCap.Round,
+            IsHitTestVisible = false
+        };
+
+        OverlayCanvas.Children.Add(seg);
+        _strokeSegments.Add((seg, thickness, GetTime(), StrokeSegmentLifetime));
+        StartLaserTimer();
     }
 
     private void CompleteLaserStroke()
     {
-        if (_activeLaserStrokeLine == null || _activeLaserStrokeGlow == null || _activeLaserStrokePoints == null)
-            return;
-
-        _completedLaserStrokes.Add((_activeLaserStrokeLine, _activeLaserStrokeGlow, GetTime()));
-        _activeLaserStrokeLine = null;
-        _activeLaserStrokeGlow = null;
-        _activeLaserStrokePoints = null;
-
+        // Just reset the last stroke position — existing dots will dissolve on their own
+        _lastStrokeDotPos = null;
         StartLaserTimer();
     }
 
@@ -403,28 +482,59 @@ public partial class OverlayWindow : Window
             }
         }
 
-        // Fade completed strokes
-        for (int i = _completedLaserStrokes.Count - 1; i >= 0; i--)
+        // Fade and shrink all trail dots (shooting star effect for cursor movement)
+        for (int i = _trailDots.Count - 1; i >= 0; i--)
         {
-            var (line, glow, completedAt) = _completedLaserStrokes[i];
-            var elapsed = now - completedAt;
-            if (elapsed >= LaserStrokeFadeDuration)
+            var (dot, cx, cy, baseSize, createdAt, lifetime) = _trailDots[i];
+            var elapsed = now - createdAt;
+            if (elapsed >= lifetime)
             {
-                OverlayCanvas.Children.Remove(line);
-                OverlayCanvas.Children.Remove(glow);
-                _completedLaserStrokes.RemoveAt(i);
+                OverlayCanvas.Children.Remove(dot);
+                _trailDots.RemoveAt(i);
             }
             else
             {
-                var alpha = 1.0 - (elapsed / LaserStrokeFadeDuration);
-                ((SolidColorBrush)line.Stroke!).Opacity = alpha * 0.95;
-                ((SolidColorBrush)glow.Stroke!).Opacity = alpha * 0.2;
+                var progress = elapsed / lifetime;
+                var scale = Math.Max(0.02, 1.0 - progress); // shrinks from full to ~0
+                var alpha = (1.0 - progress) * 0.9;
+
+                var newSize = baseSize * scale;
+                dot.Width = newSize;
+                dot.Height = newSize;
+                dot.Opacity = alpha;
+
+                // Reposition to keep centered as it shrinks
+                System.Windows.Controls.Canvas.SetLeft(dot, cx - newSize / 2);
+                System.Windows.Controls.Canvas.SetTop(dot, cy - newSize / 2);
                 anyActive = true;
             }
         }
 
-        // Active stroke is always visible, keep timer running
-        if (_activeLaserStrokePoints != null)
+        // Fade and thin stroke line segments (dissolving drawing lines)
+        for (int i = _strokeSegments.Count - 1; i >= 0; i--)
+        {
+            var (seg, baseThickness, createdAt, lifetime) = _strokeSegments[i];
+            var elapsed = now - createdAt;
+            if (elapsed >= lifetime)
+            {
+                OverlayCanvas.Children.Remove(seg);
+                _strokeSegments.RemoveAt(i);
+            }
+            else
+            {
+                var progress = elapsed / lifetime;
+                var alpha = (1.0 - progress) * 0.9;
+                var thickness = baseThickness * Math.Max(0.05, 1.0 - progress); // thins out
+
+                seg.StrokeThickness = thickness;
+                if (seg.Stroke is SolidColorBrush brush)
+                    seg.Stroke = new SolidColorBrush(brush.Color) { Opacity = alpha };
+                anyActive = true;
+            }
+        }
+
+        // Keep timer running if anything active
+        if (_trailDots.Count > 0 || _strokeSegments.Count > 0)
             anyActive = true;
 
         if (!anyActive)
@@ -453,17 +563,13 @@ public partial class OverlayWindow : Window
     public void ClearLaser()
     {
         RemoveLaserCursor();
-        if (_activeLaserStrokeLine != null) OverlayCanvas.Children.Remove(_activeLaserStrokeLine);
-        if (_activeLaserStrokeGlow != null) OverlayCanvas.Children.Remove(_activeLaserStrokeGlow);
-        _activeLaserStrokeLine = null;
-        _activeLaserStrokeGlow = null;
-        _activeLaserStrokePoints = null;
-        foreach (var (line, glow, _) in _completedLaserStrokes)
-        {
-            OverlayCanvas.Children.Remove(line);
-            OverlayCanvas.Children.Remove(glow);
-        }
-        _completedLaserStrokes.Clear();
+        _lastStrokeDotPos = null;
+        foreach (var (dot, _, _, _, _, _) in _trailDots)
+            OverlayCanvas.Children.Remove(dot);
+        _trailDots.Clear();
+        foreach (var (seg, _, _, _) in _strokeSegments)
+            OverlayCanvas.Children.Remove(seg);
+        _strokeSegments.Clear();
         _laserTimer?.Stop();
         _laserTimer = null;
     }

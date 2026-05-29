@@ -33,6 +33,14 @@
         <TextBlock Text="Click Types" FontWeight="SemiBold" Margin="0,8,0,4" Foreground="#A6ADC8"/>
         <CheckBox x:Name="ShowLaserPointerCheck" Content="Laser Pointer Mode" Margin="0,0,0,4"/>
         <TextBlock Text="Show a fading red pointer and draw temporary strokes while dragging." FontSize="11" Foreground="#6C7086" Margin="16,0,0,4"/>
+        <CheckBox x:Name="HideSystemCursorCheck" Content="Hide System Cursor" Margin="16,0,0,4"/>
+        <TextBlock Text="Hides the mouse cursor when laser pointer is active." FontSize="11" Foreground="#6C7086" Margin="32,0,0,4"/>
+        <CheckBox x:Name="ShootingStarTrailCheck" Content="Shooting Star Trail" Margin="16,0,0,4"/>
+        <TextBlock Text="Leaves dissolving dots that shrink like a comet tail." FontSize="11" Foreground="#6C7086" Margin="32,0,0,4"/>
+        <TextBlock Margin="16,4,0,2">
+            <Run Text="Pointer Size: "/><Run x:Name="LaserSizeLabel" Text="12"/>
+        </TextBlock>
+        <Slider x:Name="LaserSizeSlider" Minimum="4" Maximum="40" TickFrequency="1" IsSnapToTickEnabled="True" Margin="16,0,0,8"/>
         <CheckBox x:Name="ShowPressCheck" Content="Show Press"/>
         <CheckBox x:Name="ShowReleaseCheck" Content="Show Release"/>
         <CheckBox x:Name="ShowRightClickCheck" Content="Show Right-Click"/>

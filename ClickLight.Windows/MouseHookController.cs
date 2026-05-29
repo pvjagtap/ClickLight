@@ -55,6 +55,7 @@ public sealed class MouseHookController : IDisposable
     private IntPtr _hookId = IntPtr.Zero;
     private LowLevelMouseProc? _proc;
     private bool _leftButtonDown;
+    private bool _middleButtonDown;
     private POINT _dragStartPoint;
     private POINT _lastDragEmitPoint;
     private DateTime _lastDragTime = DateTime.MinValue;
@@ -93,6 +94,7 @@ public sealed class MouseHookController : IDisposable
         }
         _proc = null;
         _leftButtonDown = false;
+        _middleButtonDown = false;
     }
 
     private IntPtr HookCallback(int nCode, IntPtr wParam, IntPtr lParam)
@@ -128,15 +130,22 @@ public sealed class MouseHookController : IDisposable
                     break;
 
                 case WM_MBUTTONDOWN:
+                    _middleButtonDown = true;
+                    if (!_leftButtonDown)
+                    {
+                        _dragStartPoint = hookStruct.pt;
+                        _lastDragEmitPoint = hookStruct.pt;
+                    }
                     FireEvent(ClickKind.MiddleDown, x, y, now);
                     break;
 
                 case WM_MBUTTONUP:
+                    _middleButtonDown = false;
                     FireEvent(ClickKind.MiddleUp, x, y, now);
                     break;
 
                 case WM_MOUSEMOVE:
-                    if (_leftButtonDown)
+                    if (_leftButtonDown || _middleButtonDown)
                     {
                         var elapsed = DateTime.UtcNow - _lastDragTime;
                         var distSq = Math.Pow(x - _lastDragEmitPoint.x, 2) + Math.Pow(y - _lastDragEmitPoint.y, 2);

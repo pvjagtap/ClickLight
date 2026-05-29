@@ -25,11 +25,17 @@ public sealed class OverlayCoordinator
     {
         RebuildOverlays();
         SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
+
+        // Hide cursor if laser pointer is already enabled
+        var settings = _settingsStore.Settings;
+        if (settings.ShowLaserPointer && settings.HideSystemCursor && settings.IsEnabled)
+            CursorHider.Hide();
     }
 
     public void Stop()
     {
         SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
+        CursorHider.Restore();
         foreach (var overlay in _overlays.Values)
             overlay.Close();
         _overlays.Clear();
@@ -58,11 +64,23 @@ public sealed class OverlayCoordinator
 
     private void OnSettingsChanged()
     {
+        var settings = _settingsStore.Settings;
+
         // Clear laser visuals when laser pointer mode is turned off
-        if (!_settingsStore.Settings.ShowLaserPointer)
+        if (!settings.ShowLaserPointer)
         {
             foreach (var overlay in _overlays.Values)
                 overlay.ClearLaser();
+        }
+
+        // Manage system cursor visibility
+        if (settings.ShowLaserPointer && settings.HideSystemCursor && settings.IsEnabled)
+        {
+            CursorHider.Hide();
+        }
+        else
+        {
+            CursorHider.Restore();
         }
     }
 
